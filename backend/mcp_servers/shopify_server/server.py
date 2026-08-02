@@ -2,7 +2,7 @@
 shopify-mcp — FashionOS MCP Server
 Exposes Shopify Admin API as MCP tools for all FashionOS agents.
 
-Read tools  : list_products, get_product_by_sku, get_inventory_levels,
+Read tools  : list_products, get_product_by_sku, get_price_rules, list_locations,
               get_recent_orders, get_returns, calculate_sales_velocity
 Write tools : update_product_price, set_inventory_level,
               create_restock_recommendation
@@ -223,6 +223,34 @@ async def get_price_rules(brand_id: str, active_only: bool = True) -> list[dict]
 
     return rules
 
+
+@mcp.tool()
+async def list_locations(brand_id: str) -> list[dict]:
+    """
+    List all fulfillment locations (warehouses) configured in Shopify.
+
+    Args:
+        brand_id: The ID of the brand to query.
+
+    Returns location_id + name for each location. Call this before
+    set_inventory_level, which requires a location_id and has no other way
+    to discover one.
+    Used by: Inventory Agent (restock corrections), Restock Agent.
+    """
+    try:
+        data = await _shopify_get(brand_id, "locations.json")
+    except ValueError as e:
+        return [{"error": str(e)}]
+    return [
+        {
+            "location_id": loc["id"],
+            "name":        loc.get("name", ""),
+            "active":      loc.get("active", True),
+        }
+        for loc in data.get("locations", [])
+    ]
+
+
 @mcp.tool()
 async def get_recent_orders(brand_id: str, hours: int = 24, paid_only: bool = True) -> list[dict]:
     """
@@ -426,7 +454,7 @@ async def set_inventory_level(
     Args:
         brand_id:          The ID of the brand to query.
         inventory_item_id: Shopify inventory item ID (from variant).
-        location_id:       Shopify location ID (get from store settings).
+        location_id:       Shopify location ID — call list_locations if you don't have this.
         available:         New available quantity (absolute, not delta).
         reason:            Why inventory is being adjusted — for audit log.
 

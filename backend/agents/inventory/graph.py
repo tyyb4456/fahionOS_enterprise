@@ -1,0 +1,215 @@
+"""
+Inventory Agent — LangGraph pipeline.
+
+Flow (see design doc):
+    build_context   (Step 1 — read Postgres: products, sales, POs, suppliers,
+                      warehouses, seasonal calendar)
+        -> reason           (Steps 2-4 — ReAct loop; tools = live Shopify
+                              data via shopify-mcp + forecasting + supplier/
+                              warehouse lookups + RAG (policies + past run
+                              notes), all called on demand)
+        -> extract_decision (Step 5/6 — condense the transcript into the
+                              structured AgentDecision)
+        -> persist          (Step 7 — write forecasts/recommendations/alerts
+                              + execution log + memory)
+
+Steps 2 ("Fetch Live Data"), 3 ("Retrieve Memory / RAG"), and the forecast
+model are all on-demand tools inside the ReAct loop rather than forced
+pre-steps. A blind pre-fetch runs one fixed, generic query regardless of
+what the agent ends up needing; a targeted retrieve_policy("ABC Textile
+reorder terms") call once the agent has seen a real low-stock SKU and
+supplier beats a canned query every time, and skips the round-trip
+entirely on runs where policy context doesn't end up mattering.
+"""
+from __future__ import annotations
+
+import os
+import time
+from typing import Any
+
+from langchain_anthropic import ChatAnthropic
+from langgraph.graph import END, StateGraph
+from langgraph.prebuilt import create_react_agent
+
+from db import crud_inventory as crud
+from db.session import AsyncSessionLocal
+from state import PipelineState
+
+from .mcp_client import get_shopify_tools
+from .output_schema import AgentDecision
+from .prompts import SYSTEM_PROMPT, build_task_prompt
+from .tool_scoping import scope_tools_to_brand
+from .tools import build_internal_tools
+
+MODEL_NAME = os.getenv("INVENTORY_AGENT_MODEL", "claude-sonnet-5")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Nodes
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def build_context_node(state: PipelineState) -> dict:
+    async with AsyncSessionLocal() as session:
+        context = await crud.get_business_context(session, state["brand_id"])
+    return {"context": context}
+
+
+async def reasoning_node(state: PipelineState) -> dict:
+    brand_id = state["brand_id"]
+
+    shopify_tools = scope_tools_to_brand(await get_shopify_tools(), brand_id)
+    internal_tools = build_internal_tools(brand_id)
+    tools = [*shopify_tools, *internal_tools]
+
+    llm = ChatAnthropic(model=MODEL_NAME, temperature=0)
+    agent = create_react_agent(llm, tools)
+
+    task_prompt = build_task_prompt(state.get("task", {}), state.get("context", {}))
+    result = await agent.ainvoke({
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": task_prompt},
+        ]
+    })
+
+    tools_used = sorted({
+        call["name"]
+        for message in result["messages"]
+        for call in (getattr(message, "tool_calls", None) or [])
+    })
+
+    return {"messages": result["messages"], "tools_used": tools_used}
+
+
+async def extract_decision_node(state: PipelineState) -> dict:
+    """Condense the ReAct transcript into the structured decision object."""
+    llm = ChatAnthropic(model=MODEL_NAME, temperature=0).with_structured_output(AgentDecision)
+
+    transcript = "\n".join(
+        f"{getattr(m, 'type', 'message')}: {m.content}"
+        for m in state.get("messages", [])
+        if getattr(m, "content", None)
+    )
+
+    decision: AgentDecision = await llm.ainvoke(
+        "Based on this analysis, produce the final structured inventory decision:\n\n" + transcript
+    )
+
+    return {
+        "forecasts": [f.model_dump() for f in decision.forecasts],
+        "recommendations": [r.model_dump() for r in decision.recommendations],
+        "alerts": [a.model_dump() for a in decision.alerts],
+        "summary": decision.summary,
+        "confidence": decision.confidence,
+        "next_actions": decision.next_actions,
+    }
+
+
+async def persist_node(state: PipelineState) -> dict:
+    brand_id = state["brand_id"]
+    forecasts = state.get("forecasts", [])
+    recommendations = state.get("recommendations", [])
+    alerts = state.get("alerts", [])
+
+    async with AsyncSessionLocal() as session:
+        await crud.save_forecasts(session, brand_id, forecasts)
+        await crud.save_recommendations(session, brand_id, recommendations)
+        await crud.save_alerts(session, brand_id, alerts)
+        if state.get("summary"):
+            await crud.save_agent_memory(session, brand_id, "inventory_agent", state["summary"], kind="run_summary")
+        await session.commit()
+
+    db_updates = []
+    if forecasts:
+        db_updates.append(f"inventory_forecasts: +{len(forecasts)}")
+    if recommendations:
+        db_updates.append(f"reorder_recommendations: +{len(recommendations)}")
+    if alerts:
+        db_updates.append(f"inventory_alerts: +{len(alerts)}")
+
+    return {"status": "completed", "db_updates": db_updates}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Graph assembly
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_inventory_graph():
+    graph = StateGraph(PipelineState)
+    graph.add_node("build_context", build_context_node)
+    graph.add_node("reason", reasoning_node)
+    graph.add_node("extract_decision", extract_decision_node)
+    graph.add_node("persist", persist_node)
+
+    graph.set_entry_point("build_context")
+    graph.add_edge("build_context", "reason")
+    graph.add_edge("reason", "extract_decision")
+    graph.add_edge("extract_decision", "persist")
+    graph.add_edge("persist", END)
+
+    return graph.compile()
+
+
+_inventory_graph = None
+
+
+def get_inventory_graph():
+    global _inventory_graph
+    if _inventory_graph is None:
+        _inventory_graph = build_inventory_graph()
+    return _inventory_graph
+
+
+async def run_inventory_agent(brand_id: str, task: dict) -> dict[str, Any]:
+    """
+    Entry point. `task` matches the design doc's supervisor input, e.g.:
+        {"task_type": "forecast_inventory", "forecast_days": 30,
+         "priority": "high", "trigger": "daily_scheduler"}
+
+    Returns the structured object handed back to the supervisor.
+    """
+    start = time.perf_counter()
+    graph = get_inventory_graph()
+    initial_state: PipelineState = {
+        "brand_id": brand_id,
+        "task": task,
+        "messages": [],
+        "status": "running",
+    }
+
+    try:
+        final_state = await graph.ainvoke(initial_state)
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - start) * 1000
+        async with AsyncSessionLocal() as session:
+            await crud.log_execution(
+                session, brand_id, "inventory_agent", task.get("task_type", "unknown"),
+                status="failed", duration_ms=duration_ms, tools_used=[], token_usage={},
+                summary=str(exc),
+            )
+            await session.commit()
+        raise
+
+    duration_ms = (time.perf_counter() - start) * 1000
+    async with AsyncSessionLocal() as session:
+        await crud.log_execution(
+            session, brand_id, "inventory_agent", task.get("task_type", "unknown"),
+            status="completed", duration_ms=duration_ms,
+            tools_used=final_state.get("tools_used", []), token_usage={},
+            summary=final_state.get("summary", ""),
+        )
+        await session.commit()
+
+    alerts = final_state.get("alerts", [])
+    return {
+        "status": "completed",
+        "summary": final_state.get("summary", ""),
+        "critical_alerts": [a for a in alerts if a.get("severity") in ("high", "critical")],
+        "alerts": alerts,
+        "recommendations": final_state.get("recommendations", []),
+        "forecasts": final_state.get("forecasts", []),
+        "db_updates": final_state.get("db_updates", []),
+        "confidence": final_state.get("confidence", 0.0),
+        "next_actions": final_state.get("next_actions", []),
+        "duration_ms": round(duration_ms, 1),
+    }
