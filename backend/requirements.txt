@@ -5,8 +5,11 @@ langchain[google-genai]
 langchain-mcp-adapters
 langgraph-checkpoint-redis
 langchain-mistralai
-langchain-google-genai 
+langchain-google-genai
+langchain-anthropic
 langchain-text-splitters
+
+chromadb
 
 pydantic
 pydantic[email]
@@ -30,3 +33,6 @@ clerk-backend-api
 svix
 
 numpy
+
+pypdf
+docx

@@ -1,25 +1,24 @@
 """
-Inventory Agent — LangGraph pipeline.
+Sales Agent — LangGraph pipeline.
 
-Flow (see design doc):
-    build_context   (Step 1 — read Postgres: products, sales, POs, suppliers,
-                      warehouses, seasonal calendar)
+Same shape as agents/inventory/graph.py:
+    build_context   (Step 1 — read Postgres: revenue, products, returns,
+                      customers, discounts, daily revenue series)
         -> reason           (Steps 2-4 — ReAct loop; tools = live Shopify
-                              data via shopify-mcp + forecasting + supplier/
-                              warehouse lookups + RAG (policies + past run
-                              notes), all called on demand)
+                              read data via shopify-mcp + revenue/KPI/
+                              anomaly/forecast math + customer segmentation/
+                              cohort + RAG, all called on demand)
         -> extract_decision (Step 5/6 — condense the transcript into the
-                              structured AgentDecision)
-        -> persist          (Step 7 — write forecasts/recommendations/alerts
-                              + execution log + memory)
+                              structured SalesDecision)
+        -> persist          (Step 7 — write reports/insights/forecasts/
+                              anomalies/customer segments + execution log +
+                              memory)
 
-Steps 2 ("Fetch Live Data"), 3 ("Retrieve Memory / RAG"), and the forecast
-model are all on-demand tools inside the ReAct loop rather than forced
-pre-steps. A blind pre-fetch runs one fixed, generic query regardless of
-what the agent ends up needing; a targeted retrieve_policy("ABC Textile
-reorder terms") call once the agent has seen a real low-stock SKU and
-supplier beats a canned query every time, and skips the round-trip
-entirely on runs where policy context doesn't end up mattering.
+RAG note: retrieval is NOT a forced pre-step/node here, same as Inventory.
+It's the retrieve_policy / search_agent_memory tools in agents/sales/
+tools.py, backed by agents/sales/memory.py's Chroma collections — the
+ReAct loop calls them only when it decides it needs brand policy or
+past-run context.
 """
 from __future__ import annotations
 
@@ -33,33 +32,33 @@ from deepagents import create_deep_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
 
-from db import crud_inventory as crud
+from agents.common.tool_scoping import scope_tools_to_brand
+from db import crud_sales as crud
 from db.session import AsyncSessionLocal
-from .state import InventoryPipelineState
 
-from .mcp_client import get_shopify_tools
-from .output_schema import AgentDecision
+from .mcp_client import get_shopify_read_tools
+from .output_schema import SalesDecision
 from .prompts import SYSTEM_PROMPT, build_task_prompt
-from .tool_scoping import scope_tools_to_brand
+from .state import SalesPipelineState
 from .tools import build_internal_tools
 
-from dotenv import load_dotenv
-load_dotenv()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Nodes
 # ══════════════════════════════════════════════════════════════════════════════
 
-async def build_context_node(state: InventoryPipelineState) -> dict:
+async def build_context_node(state: SalesPipelineState) -> dict:
+    time_range = state.get("task", {}).get("time_range", "last_7_days")
     async with AsyncSessionLocal() as session:
-        context = await crud.get_business_context(session, state["brand_id"])
+        context = await crud.get_business_context(session, state["brand_id"], time_range=time_range)
     return {"context": context}
 
 
-async def reasoning_node(state: InventoryPipelineState) -> dict:
+async def reasoning_node(state: SalesPipelineState) -> dict:
     brand_id = state["brand_id"]
 
-    shopify_tools = scope_tools_to_brand(await get_shopify_tools(), brand_id)
+    shopify_tools = scope_tools_to_brand(await get_shopify_read_tools(), brand_id)
     internal_tools = build_internal_tools(brand_id)
     tools = [*shopify_tools, *internal_tools]
 
@@ -88,7 +87,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
     return {"messages": result["messages"], "tools_used": tools_used}
 
 
-async def extract_decision_node(state: InventoryPipelineState) -> dict:
+async def extract_decision_node(state: SalesPipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
     model = init_chat_model("google_genai:gemini-3.6-flash")
 
@@ -98,41 +97,57 @@ async def extract_decision_node(state: InventoryPipelineState) -> dict:
         if getattr(m, "content", None)
     )
 
-    decision: AgentDecision = await model.ainvoke(
-        "Based on this analysis, produce the final structured inventory decision:\n\n" + transcript
+    decision: SalesDecision = await model.ainvoke(
+        "Based on this analysis, produce the final structured sales decision:\n\n" + transcript
     )
 
     return {
+        "kpis": decision.kpis.model_dump(),
+        "insights": [i.model_dump() for i in decision.insights],
         "forecasts": [f.model_dump() for f in decision.forecasts],
-        "recommendations": [r.model_dump() for r in decision.recommendations],
-        "alerts": [a.model_dump() for a in decision.alerts],
+        "anomalies": [a.model_dump() for a in decision.anomalies],
+        "customer_segments": [c.model_dump() for c in decision.customer_segments],
+        "recommendations": decision.recommendations,
         "summary": decision.summary,
         "confidence": decision.confidence,
         "next_actions": decision.next_actions,
     }
 
 
-async def persist_node(state: InventoryPipelineState) -> dict:
+async def persist_node(state: SalesPipelineState) -> dict:
     brand_id = state["brand_id"]
+    period = state.get("task", {}).get("time_range", "last_7_days")
+
+    kpis = state.get("kpis", {})
+    insights = state.get("insights", [])
     forecasts = state.get("forecasts", [])
-    recommendations = state.get("recommendations", [])
-    alerts = state.get("alerts", [])
+    anomalies = state.get("anomalies", [])
+    customer_segments = state.get("customer_segments", [])
+    summary = state.get("summary", "")
 
     async with AsyncSessionLocal() as session:
-        await crud.save_forecasts(session, brand_id, forecasts)
-        await crud.save_recommendations(session, brand_id, recommendations)
-        await crud.save_alerts(session, brand_id, alerts)
-        if state.get("summary"):
-            await crud.save_agent_memory(session, brand_id, "inventory_agent", state["summary"], kind="run_summary")
+        await crud.save_sales_report(session, brand_id, period, summary, kpis)
+        if insights:
+            await crud.save_sales_insights(session, brand_id, insights)
+        if forecasts:
+            await crud.save_sales_forecasts(session, brand_id, forecasts)
+        if anomalies:
+            await crud.save_sales_anomalies(session, brand_id, anomalies)
+        if customer_segments:
+            await crud.save_customer_segments(session, brand_id, customer_segments)
+        if summary:
+            await crud.save_agent_memory(session, brand_id, "sales_agent", summary, kind="run_summary")
         await session.commit()
 
-    db_updates = []
+    db_updates = ["sales_reports: +1"]
+    if insights:
+        db_updates.append(f"sales_insights: +{len(insights)}")
     if forecasts:
-        db_updates.append(f"inventory_forecasts: +{len(forecasts)}")
-    if recommendations:
-        db_updates.append(f"reorder_recommendations: +{len(recommendations)}")
-    if alerts:
-        db_updates.append(f"inventory_alerts: +{len(alerts)}")
+        db_updates.append(f"sales_forecasts: +{len(forecasts)}")
+    if anomalies:
+        db_updates.append(f"sales_anomalies: +{len(anomalies)}")
+    if customer_segments:
+        db_updates.append(f"customer_segments: upserted {len(customer_segments)}")
 
     return {"status": "completed", "db_updates": db_updates}
 
@@ -141,8 +156,8 @@ async def persist_node(state: InventoryPipelineState) -> dict:
 # Graph assembly
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_inventory_graph():
-    graph = StateGraph(InventoryPipelineState)
+def build_sales_graph():
+    graph = StateGraph(SalesPipelineState)
     graph.add_node("build_context", build_context_node)
     graph.add_node("reason", reasoning_node)
     graph.add_node("extract_decision", extract_decision_node)
@@ -157,27 +172,30 @@ def build_inventory_graph():
     return graph.compile()
 
 
-_inventory_graph = None
+_sales_graph = None
 
 
-def get_inventory_graph():
-    global _inventory_graph
-    if _inventory_graph is None:
-        _inventory_graph = build_inventory_graph()
-    return _inventory_graph
+def get_sales_graph():
+    global _sales_graph
+    if _sales_graph is None:
+        _sales_graph = build_sales_graph()
+    return _sales_graph
 
 
-async def run_inventory_agent(brand_id: str, task: dict) -> dict[str, Any]:
+async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
     """
     Entry point. `task` matches the design doc's supervisor input, e.g.:
-        {"task_type": "forecast_inventory", "forecast_days": 30,
+        {"task_type": "analyze_sales", "time_range": "last_7_days",
          "priority": "high", "trigger": "daily_scheduler"}
+    or:
+        {"task_type": "answer_question", "question": "Why did revenue drop yesterday?",
+         "time_range": "yesterday", "trigger": "manual"}
 
     Returns the structured object handed back to the supervisor.
     """
     start = time.perf_counter()
-    graph = get_inventory_graph()
-    initial_state: InventoryPipelineState = {
+    graph = get_sales_graph()
+    initial_state: SalesPipelineState = {
         "brand_id": brand_id,
         "task": task,
         "messages": [],
@@ -190,7 +208,7 @@ async def run_inventory_agent(brand_id: str, task: dict) -> dict[str, Any]:
         duration_ms = (time.perf_counter() - start) * 1000
         async with AsyncSessionLocal() as session:
             await crud.log_execution(
-                session, brand_id, "inventory_agent", task.get("task_type", "unknown"),
+                session, brand_id, "sales_agent", task.get("task_type", "unknown"),
                 status="failed", duration_ms=duration_ms, tools_used=[], token_usage={},
                 summary=str(exc),
             )
@@ -200,21 +218,22 @@ async def run_inventory_agent(brand_id: str, task: dict) -> dict[str, Any]:
     duration_ms = (time.perf_counter() - start) * 1000
     async with AsyncSessionLocal() as session:
         await crud.log_execution(
-            session, brand_id, "inventory_agent", task.get("task_type", "unknown"),
+            session, brand_id, "sales_agent", task.get("task_type", "unknown"),
             status="completed", duration_ms=duration_ms,
             tools_used=final_state.get("tools_used", []), token_usage={},
             summary=final_state.get("summary", ""),
         )
         await session.commit()
 
-    alerts = final_state.get("alerts", [])
     return {
         "status": "completed",
         "summary": final_state.get("summary", ""),
-        "critical_alerts": [a for a in alerts if a.get("severity") in ("high", "critical")],
-        "alerts": alerts,
-        "recommendations": final_state.get("recommendations", []),
+        "kpis": final_state.get("kpis", {}),
+        "insights": final_state.get("insights", []),
         "forecasts": final_state.get("forecasts", []),
+        "anomalies": final_state.get("anomalies", []),
+        "customer_segments": final_state.get("customer_segments", []),
+        "recommendations": final_state.get("recommendations", []),
         "db_updates": final_state.get("db_updates", []),
         "confidence": final_state.get("confidence", 0.0),
         "next_actions": final_state.get("next_actions", []),

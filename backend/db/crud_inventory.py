@@ -273,12 +273,10 @@ async def log_execution(
     token_usage: dict,
     summary: str,
 ) -> None:
-    session.add(AgentExecutionLog(
-        brand_id=brand_id, agent=agent, task=task_type, status=status,
-        duration_ms=duration_ms, tools_used=tools_used, token_usage=token_usage,
-        summary=summary,
-    ))
-    await session.flush()
+    from db import crud_common
+    await crud_common.log_execution(
+        session, brand_id, agent, task_type, status, duration_ms, tools_used, token_usage, summary,
+    )
 
 
 async def save_agent_memory(
@@ -286,8 +284,8 @@ async def save_agent_memory(
 ) -> None:
     """Structured copy in Postgres (audit trail) + semantic copy in Chroma
     (so future runs can retrieve it by meaning, see agents/inventory/memory.py)."""
-    session.add(AgentMemory(brand_id=brand_id, agent=agent, content=content, kind=kind))
-    await session.flush()
+    from db import crud_common
+    await crud_common.save_agent_memory_record(session, brand_id, agent, content, kind=kind)
 
     from agents.inventory import memory as rag  # local import avoids a load-time cycle
     await rag.store_memory(brand_id, content, kind=kind)

@@ -15,44 +15,36 @@ from db.models import PolicyDocument
 
 
 async def create_policy_document(
-    session: AsyncSession, brand_id: str, filename: str, chunk_count: int, document_id: uuid_module.UUID
+    session: AsyncSession, brand_id: str, filename: str, chunk_count: int, document_id: uuid_module.UUID,
+    agent: str = "inventory",
 ) -> PolicyDocument:
-    """
-    `document_id` must be the same id used to tag chunks in Chroma (see
-    api/routers/policy_documents.py) — this row's primary key IS that id,
-    not a separately auto-generated one, so deletion can find both sides
-    with a single id.
-    """
-    doc = PolicyDocument(id=document_id, brand_id=brand_id, filename=filename, chunk_count=chunk_count)
+    doc = PolicyDocument(id=document_id, brand_id=brand_id, agent=agent, filename=filename, chunk_count=chunk_count)
     session.add(doc)
     await session.flush()
     return doc
 
 
-async def list_policy_documents(session: AsyncSession, brand_id: str) -> list[dict]:
+async def list_policy_documents(session: AsyncSession, brand_id: str, agent: str = "inventory") -> list[dict]:
     stmt = (
         select(PolicyDocument)
-        .where(PolicyDocument.brand_id == brand_id)
+        .where(PolicyDocument.brand_id == brand_id, PolicyDocument.agent == agent)
         .order_by(PolicyDocument.created_at.desc())
     )
     return [
-        {
-            "id": str(d.id), "filename": d.filename,
-            "chunk_count": d.chunk_count, "created_at": d.created_at.isoformat(),
-        }
+        {"id": str(d.id), "filename": d.filename, "chunk_count": d.chunk_count, "created_at": d.created_at.isoformat()}
         for d in (await session.execute(stmt)).scalars().all()
     ]
 
 
 async def get_policy_document(
-    session: AsyncSession, brand_id: str, document_id: str
+    session: AsyncSession, brand_id: str, document_id: str, agent: str = "inventory"
 ) -> Optional[PolicyDocument]:
     try:
         doc_uuid = uuid_module.UUID(document_id)
     except ValueError:
         return None
     stmt = select(PolicyDocument).where(
-        PolicyDocument.brand_id == brand_id, PolicyDocument.id == doc_uuid
+        PolicyDocument.brand_id == brand_id, PolicyDocument.id == doc_uuid, PolicyDocument.agent == agent,
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 

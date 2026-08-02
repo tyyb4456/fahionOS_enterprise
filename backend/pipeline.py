@@ -14,6 +14,7 @@ import asyncio
 from typing import Any
 
 from agents.inventory.graph import run_inventory_agent
+from agents.sales.graph import run_sales_agent
 
 
 def _run_async(coro: "asyncio.coroutines.Coroutine") -> Any:
@@ -34,3 +35,8 @@ def _run_async(coro: "asyncio.coroutines.Coroutine") -> Any:
 def run_inventory_agent_sync(brand_id: str, task: dict) -> dict[str, Any]:
     """Celery-safe wrapper around the async Inventory Agent graph."""
     return _run_async(run_inventory_agent(brand_id, task))
+
+
+def run_sales_agent_sync(brand_id: str, task: dict) -> dict[str, Any]:
+    """Celery-safe wrapper around the async Sales Agent graph."""
+    return _run_async(run_sales_agent(brand_id, task))

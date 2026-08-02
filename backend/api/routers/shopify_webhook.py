@@ -30,7 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.credentials import decrypt_value
-from db.models import Brand, OrderLineItem, Product, ProductVariant, Return, SalesOrder
+from db.models import Brand, Customer, OrderLineItem, Product, ProductVariant, Return, SalesOrder
 from db.session import AsyncSessionLocal
 
 router = APIRouter(prefix="/api/v1/webhooks/shopify", tags=["shopify-webhooks"])
@@ -132,6 +132,17 @@ async def _sync_order(session: AsyncSession, brand_id: str, payload: dict) -> No
 
     order.financial_status = payload.get("financial_status", order.financial_status)
     order.fulfillment_status = payload.get("fulfillment_status", order.fulfillment_status)
+    order.subtotal_price = float(payload.get("subtotal_price") or 0)
+    order.total_discounts = float(payload.get("total_discounts") or 0)
+    order.total_price = float(payload.get("total_price") or 0)
+
+    codes = [c.get("code", "") for c in payload.get("discount_codes", []) if c.get("code")]
+    order.discount_codes = ",".join(codes) if codes else None
+
+    customer_payload = payload.get("customer")
+    if customer_payload:
+        order.shopify_customer_id = customer_payload.get("id")
+        await _sync_customer(session, brand_id, customer_payload, order.created_at)
 
     existing = (await session.execute(
         select(OrderLineItem).where(OrderLineItem.order_id == order.id)
@@ -153,6 +164,48 @@ async def _sync_order(session: AsyncSession, brand_id: str, payload: dict) -> No
     await session.flush()
 
 
+async def _sync_customer(session: AsyncSession, brand_id: str, customer_payload: dict, order_created_at: datetime) -> None:
+    """
+    Upserts a Customer row from the `customer` object nested in an order
+    webhook payload. No separate customers/* webhook subscription needed —
+    every paid order carries the buyer's current Shopify customer record,
+    which is fresh enough for the Sales Agent's segmentation/LTV use.
+    """
+    shopify_customer_id = customer_payload.get("id")
+    if not shopify_customer_id:
+        return
+
+    customer = (await session.execute(
+        select(Customer).where(Customer.brand_id == brand_id, Customer.shopify_customer_id == shopify_customer_id)
+    )).scalar_one_or_none()
+
+    if customer is None:
+        customer = Customer(
+            brand_id=brand_id, shopify_customer_id=shopify_customer_id,
+            first_order_at=order_created_at, last_order_at=order_created_at,
+        )
+        session.add(customer)
+    else:
+        if customer.first_order_at is None or order_created_at < customer.first_order_at:
+            customer.first_order_at = order_created_at
+        if customer.last_order_at is None or order_created_at > customer.last_order_at:
+            customer.last_order_at = order_created_at
+
+    address = customer_payload.get("default_address") or {}
+    customer.email = customer_payload.get("email") or customer.email
+    customer.first_name = customer_payload.get("first_name") or customer.first_name
+    customer.last_name = customer_payload.get("last_name") or customer.last_name
+    customer.country = address.get("country") or customer.country
+    customer.city = address.get("city") or customer.city
+    # Shopify's own running totals win when present — more accurate than us
+    # re-deriving them from whichever orders happen to have hit our webhook.
+    customer.orders_count = customer_payload.get("orders_count", customer.orders_count)
+    customer.total_spent = float(customer_payload.get("total_spent") or customer.total_spent or 0)
+    customer.synced_at = datetime.now(timezone.utc)
+
+    await session.flush()
+
+
 async def _sync_refund(session: AsyncSession, brand_id: str, payload: dict) -> None:
     order_shopify_id = payload.get("order_id")
     line_item_lookup: dict = {}
@@ -169,6 +222,14 @@ async def _sync_refund(session: AsyncSession, brand_id: str, payload: dict) -> N
 
     for rli in payload.get("refund_line_items", []):
         original = line_item_lookup.get(rli.get("line_item_id"))
+        # Shopify's refund_line_items carry `subtotal` (the actual refunded
+        # line total, after any partial/prorated adjustment) — prefer that
+        # over unit price * quantity, which can overstate a partial refund.
+        refund_amount = rli.get("subtotal")
+        if refund_amount is None:
+            unit_price = float(original.price) if original else 0.0
+            refund_amount = unit_price * rli.get("quantity", 0)
+
         session.add(Return(
             brand_id=brand_id,
             shopify_order_id=order_shopify_id or 0,
@@ -180,6 +241,7 @@ async def _sync_refund(session: AsyncSession, brand_id: str, payload: dict) -> N
             sku=original.sku if original else "",
             product_name=original.name if original else "",
             quantity=rli.get("quantity", 0),
+            refund_amount=float(refund_amount or 0),
             restock=rli.get("restock", False),
             return_reason=payload.get("note", ""),
         ))

@@ -65,7 +65,7 @@ class AlertOut(TypedDict, total=False):
     message: str
 
 
-class PipelineState(TypedDict, total=False):
+class InventoryPipelineState(TypedDict, total=False):
     # ── identity ──────────────────────────────────────────────────────────
     brand_id: str
 

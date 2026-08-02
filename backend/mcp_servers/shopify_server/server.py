@@ -516,6 +516,44 @@ async def create_restock_recommendation(
     }
 
 
+@mcp.tool()
+async def get_abandoned_checkouts(brand_id: str, hours: int = 24) -> list[dict]:
+    """
+    Get checkouts started but not completed (abandoned carts) in the last N hours.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        hours: Look-back window in hours (default 24).
+
+    Returns each abandoned checkout with its email (if captured), line
+    items, and total value — useful for correlating a revenue dip with
+    cart abandonment rather than a real demand drop.
+    Used by: Sales Agent (root-cause analysis on revenue changes).
+    """
+    since = (datetime.now() - timedelta(hours=hours)).isoformat() + "Z"
+    try:
+        data = await _shopify_get(brand_id, "checkouts.json", {
+            "created_at_min": since,
+            "limit": 250,
+            "status": "open",
+        })
+    except ValueError as e:
+        return [{"error": str(e)}]
+
+    checkouts = []
+    for c in data.get("checkouts", []):
+        checkouts.append({
+            "checkout_id":  c.get("id"),
+            "created_at":   c.get("created_at"),
+            "email":        c.get("email"),
+            "total_price":  float(c.get("total_price") or 0),
+            "line_items": [
+                {"sku": item.get("sku", ""), "title": item.get("title", ""), "quantity": item.get("quantity", 0)}
+                for item in c.get("line_items", [])
+            ],
+        })
+    return checkouts
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -100,12 +100,18 @@ class SalesOrder(Base):
     __tablename__ = "sales_orders"
     __table_args__ = (UniqueConstraint("brand_id", "shopify_order_id", name="uq_orders_brand_shopify_id"),)
 
-    id:                 Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    brand_id:           Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
-    shopify_order_id:   Mapped[int]       = mapped_column(BigInteger, nullable=False)
-    created_at:         Mapped[datetime]  = mapped_column(DateTime(timezone=True), nullable=False, index=True)
-    financial_status:   Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    fulfillment_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    id:                  Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:            Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    shopify_order_id:    Mapped[int]       = mapped_column(BigInteger, nullable=False)
+    shopify_customer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    created_at:          Mapped[datetime]  = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    financial_status:    Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    fulfillment_status:  Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # ── Sales Agent fields — revenue/discount analytics (Shopify order totals) ──
+    subtotal_price:      Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    total_discounts:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    total_price:         Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    discount_codes:      Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # comma-joined codes
 
 
 class OrderLineItem(Base):
@@ -134,8 +140,37 @@ class Return(Base):
     sku:               Mapped[str]       = mapped_column(String(255), nullable=False, default="")
     product_name:      Mapped[str]       = mapped_column(String(500), nullable=False, default="")
     quantity:          Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    refund_amount:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
     restock:           Mapped[bool]      = mapped_column(Boolean, nullable=False, default=False)
     return_reason:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+class Customer(Base):
+    """
+    Synced Shopify customer data — denormalized straight off the `customer`
+    object nested in Shopify's orders/paid webhook payload (see
+    api/routers/shopify_webhook.py::_sync_customer). No separate
+    customers/* webhook subscription needed for this to stay reasonably
+    fresh, since every paid order carries the buyer's current customer
+    record. Read by the Sales Agent for segmentation/LTV/cohort analysis.
+    """
+    __tablename__ = "customers"
+    __table_args__ = (UniqueConstraint("brand_id", "shopify_customer_id", name="uq_customers_brand_shopify_id"),)
+
+    id:                  Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:            Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    shopify_customer_id: Mapped[int]       = mapped_column(BigInteger, nullable=False)
+    email:               Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    first_name:          Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_name:           Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    country:             Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    city:                Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    orders_count:        Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    total_spent:         Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    first_order_at:      Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_order_at:       Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    synced_at:           Mapped[datetime]  = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -261,16 +296,16 @@ class AgentExecutionLog(Base):
 
 class PolicyDocument(Base):
     """
-    Bookkeeping for uploaded policy documents (Inventory Policy.pdf, Supplier
-    Contracts.pdf, ...). The actual chunk text + embeddings live in Chroma
-    (see agents/inventory/memory.py) — this table exists so the dashboard
-    can list/delete what's been indexed without querying Chroma directly,
-    which has no clean "list distinct sources" operation of its own.
+    Bookkeeping for uploaded policy documents. The `agent` field routes a
+    document to the right Chroma collection (inventory_policies_{brand_id}
+    vs sales_policies_{brand_id} — see agents/inventory/memory.py and
+    agents/sales/memory.py) so list/delete know which one to touch.
     """
     __tablename__ = "policy_documents"
 
     id:           Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id:     Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    agent:        Mapped[str]       = mapped_column(String(50), nullable=False, default="inventory", server_default="inventory")
     filename:     Mapped[str]       = mapped_column(String(500), nullable=False)
     chunk_count:  Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
     created_at:   Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -285,3 +320,70 @@ class AgentMemory(Base):
     kind:       Mapped[str]       = mapped_column(String(50), nullable=False, default="run_summary")
     content:    Mapped[str]       = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Sales Agent outputs — AI-generated business intelligence.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SalesReport(Base):
+    __tablename__ = "sales_reports"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    period:     Mapped[str]       = mapped_column(String(50), nullable=False, default="last_7_days")
+    summary:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    kpis:       Mapped[dict]      = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SalesInsight(Base):
+    __tablename__ = "sales_insights"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    category:   Mapped[str]       = mapped_column(String(50), nullable=False, default="revenue")
+    severity:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")
+    message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SalesForecast(Base):
+    __tablename__ = "sales_forecasts"
+
+    id:                Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:          Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    forecast_date:     Mapped[date]      = mapped_column(Date, nullable=False)
+    predicted_revenue: Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    predicted_orders:  Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    confidence:        Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at:        Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SalesAnomaly(Base):
+    __tablename__ = "sales_anomalies"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    metric:     Mapped[str]       = mapped_column(String(100), nullable=False)
+    expected:   Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    actual:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    severity:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")
+    message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CustomerSegment(Base):
+    __tablename__ = "customer_segments"
+    __table_args__ = (UniqueConstraint("brand_id", "segment", name="uq_segment_brand_name"),)
+
+    id:             Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:       Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    segment:        Mapped[str]       = mapped_column(String(50), nullable=False)   # VIP|Loyal|New|At Risk|Inactive
+    customer_count: Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    definition:     Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    customer_ids:   Mapped[list]      = mapped_column(JSON, nullable=False, default=list)
+    updated_at:     Mapped[datetime]  = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
