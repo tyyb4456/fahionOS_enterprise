@@ -2,6 +2,7 @@
 Prompting for the Inventory Agent's reasoning step.
 """
 import json
+from typing import Any
 
 SYSTEM_PROMPT = """You are the Inventory Agent inside FashionOS, a multi-brand fashion \
 operations platform.
@@ -52,7 +53,7 @@ def _truncate(items: list, limit: int) -> tuple[list, int]:
     return items[:limit], max(0, len(items) - limit)
 
 
-def build_task_prompt(task: dict, context: dict) -> str:
+def build_task_prompt(task: Any, context: dict) -> str:
     products, hidden_products = _truncate(context.get("products", []), 30)
     sales, hidden_sales = _truncate(context.get("sales_summary", []), 30)
     pos = context.get("open_purchase_orders", [])
@@ -66,9 +67,11 @@ def build_task_prompt(task: dict, context: dict) -> str:
     sales_header = f"## Recent sales velocity, last 14 days ({len(sales)} shown"
     sales_header += f", {hidden_sales} more not shown)" if hidden_sales else ")"
 
+    task_formatted = json.dumps(task, indent=2) if isinstance(task, dict) else str(task)
+
     parts = [
         "## Task",
-        json.dumps(task, indent=2),
+        task_formatted,
         "",
         products_header,
         json.dumps(products, indent=2),

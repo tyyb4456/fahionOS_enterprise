@@ -23,6 +23,9 @@ from deep_agent.runtime import get_cached_agent
 # read_file/edit_file (AGENTS.md memory ops) are deliberately excluded — not
 # "data" worth replaying as a card.
 PERSISTABLE_TOOLS: set[str] = {
+    "inventory_agent",
+    "sales_agent",
+    "marketing_agent",
     "start_agent_analysis",
     "check_agent_analysis_status",
     "get_pipeline_status",

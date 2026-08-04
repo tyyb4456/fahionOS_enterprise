@@ -29,6 +29,10 @@ from deep_agent.memory import ensure_brand_seeded
 from deep_agent.prompts import build_prompt
 from deep_agent.load_model import mistral
 
+from agents.inventory.graph import inventory_agent
+from agents.sales.graph import sales_agent
+from agents.marketing.graph import marketing_agent
+
 load_dotenv()
 
 REDIS_URL  = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -95,18 +99,12 @@ async def build_supervisor(brand_id: str, brand_name: str):
         name          = f"fashionos-{brand_id}",
         model         = mistral,
         system_prompt = build_prompt(brand_id, brand_name),
+        subagents     = [inventory_agent, sales_agent, marketing_agent],
         backend       = backend,
         store         = store,
         memory        = ["/memories/AGENTS.md"],
         # skills        = ["/skills/"],
         checkpointer  = checkpointer,
-        permissions   = [
-            FilesystemPermission(
-                operations=["write", "edit"],
-                paths=["/skills/**"],
-                mode="deny",
-            ),
-        ],
     )
     return agent
 

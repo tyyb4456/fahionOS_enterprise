@@ -75,7 +75,14 @@ async def reasoning_node(state: MarketingPipelineState) -> dict:
 
     agent = create_deep_agent(model, tools)
 
-    task_prompt = build_task_prompt(state.get("task", {}), state.get("context", {}))
+    messages = state.get("messages", [])
+    if messages:
+        last_msg = messages[-1]
+        task_input = getattr(last_msg, "content", str(last_msg))
+    else:
+        task_input = state.get("task", {})
+
+    task_prompt = build_task_prompt(task_input, state.get("context", {}))
     result = await agent.ainvoke({
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},

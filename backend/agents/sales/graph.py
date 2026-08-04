@@ -49,9 +49,11 @@ from .tools import build_internal_tools
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def build_context_node(state: SalesPipelineState) -> dict:
-    time_range = state.get("task", {}).get("time_range", "last_7_days")
+    brand_id = state["brand_id"]
+    task_obj = state["task", {}]
+    time_range = task_obj.get("time_range", "last_7_days") if isinstance(task_obj, dict) else "last_7_days"
     async with AsyncSessionLocal() as session:
-        context = await crud.get_business_context(session, state["brand_id"], time_range=time_range)
+        context = await crud.get_business_context(session, brand_id, time_range=time_range)
     return {"context": context}
 
 
@@ -70,7 +72,14 @@ async def reasoning_node(state: SalesPipelineState) -> dict:
 
     agent = create_deep_agent(model, tools)
 
-    task_prompt = build_task_prompt(state.get("task", {}), state.get("context", {}))
+    messages = state.get("messages", [])
+    if messages:
+        last_msg = messages[-1]
+        task_input = getattr(last_msg, "content", str(last_msg))
+    else:
+        task_input = state.get("task", {})
+
+    task_prompt = build_task_prompt(task_input, state.get("context", {}))
     result = await agent.ainvoke({
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -116,7 +125,8 @@ async def extract_decision_node(state: SalesPipelineState) -> dict:
 
 async def persist_node(state: SalesPipelineState) -> dict:
     brand_id = state["brand_id"]
-    period = state.get("task", {}).get("time_range", "last_7_days")
+    task_obj = state["task", {}]
+    period = task_obj.get("time_range", "last_7_days") if isinstance(task_obj, dict) else "last_7_days"
 
     kpis = state.get("kpis", {})
     insights = state.get("insights", [])

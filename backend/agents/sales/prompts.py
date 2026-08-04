@@ -6,6 +6,7 @@ brand. What happened -> why -> what's next -> what to do -> what to
 automate.
 """
 import json
+from typing import Any
 
 SYSTEM_PROMPT = """You are the Sales Agent inside FashionOS, a multi-brand fashion \
 operations platform. Think of yourself as the brand's Chief Revenue Officer, not a \
@@ -56,7 +57,7 @@ def _truncate(items: list, limit: int) -> tuple[list, int]:
     return items[:limit], max(0, len(items) - limit)
 
 
-def build_task_prompt(task: dict, context: dict) -> str:
+def build_task_prompt(task: Any, context: dict) -> str:
     revenue = context.get("revenue_summary", {})
     top_products, hidden_top = _truncate(context.get("top_products", []), 15)
     worst_products, hidden_worst = _truncate(context.get("worst_products", []), 15)
@@ -71,9 +72,11 @@ def build_task_prompt(task: dict, context: dict) -> str:
     worst_header = f"## Worst products by revenue ({len(worst_products)} shown"
     worst_header += f", {hidden_worst} more not shown)" if hidden_worst else ")"
 
+    task_formatted = json.dumps(task, indent=2) if isinstance(task, dict) else str(task)
+
     parts = [
         "## Task",
-        json.dumps(task, indent=2),
+        task_formatted,
         "",
         "## Revenue summary",
         json.dumps(revenue, indent=2) if revenue else "(no data for this period)",

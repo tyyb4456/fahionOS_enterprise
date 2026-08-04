@@ -6,6 +6,7 @@ What should we promote -> to whom -> on which channel -> say what -> when
 -> and (since this agent is operational) actually publish/launch it.
 """
 import json
+from typing import Any
 
 SYSTEM_PROMPT = """You are the Marketing Agent inside FashionOS, a multi-brand fashion \
 operations platform. Think of yourself as the brand's Chief Marketing Officer, not a \
@@ -67,7 +68,7 @@ def _truncate(items: list, limit: int) -> tuple[list, int]:
     return items[:limit], max(0, len(items) - limit)
 
 
-def build_task_prompt(task: dict, context: dict) -> str:
+def build_task_prompt(task: Any, context: dict) -> str:
     products, hidden_products = _truncate(context.get("products", []), 20)
     sales_insights = context.get("sales_insights", [])
     latest_report = context.get("latest_sales_report")
@@ -79,9 +80,11 @@ def build_task_prompt(task: dict, context: dict) -> str:
     products_header = f"## Products ({len(products)} shown"
     products_header += f", {hidden_products} more not shown — use check_product_stock/list_products for more)" if hidden_products else ")"
 
+    task_formatted = json.dumps(task, indent=2) if isinstance(task, dict) else str(task)
+
     parts = [
         "## Task",
-        json.dumps(task, indent=2),
+        task_formatted,
         "",
         products_header,
         json.dumps(products, indent=2),
