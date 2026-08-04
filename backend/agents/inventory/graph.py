@@ -47,7 +47,7 @@ from .state import InventoryPipelineState
 
 from .mcp_client import get_shopify_tools
 from .output_schema import AgentDecision
-from .prompts import SYSTEM_PROMPT, build_task_prompt
+from .prompt import SYSTEM_PROMPT, build_task_prompt
 from .tool_scoping import scope_tools_to_brand
 from .tools import build_internal_tools
 

@@ -44,7 +44,7 @@ from db.session import AsyncSessionLocal
 
 from .mcp_client import get_shopify_read_tools
 from .output_schema import SalesDecision
-from .prompts import SYSTEM_PROMPT, build_task_prompt
+from .prompt import SYSTEM_PROMPT, build_task_prompt
 from .state import SalesPipelineState
 from .tools import build_internal_tools
 

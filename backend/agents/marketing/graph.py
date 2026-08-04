@@ -51,7 +51,7 @@ from db.session import AsyncSessionLocal
 
 from .mcp_client import get_marketing_tools
 from .output_schema import MarketingDecision
-from .prompts import SYSTEM_PROMPT, build_task_prompt
+from .prompt import SYSTEM_PROMPT, build_task_prompt
 from .state import MarketingPipelineState
 from .tools import build_internal_tools
 
