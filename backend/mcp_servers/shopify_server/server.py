@@ -1,11 +1,11 @@
 """
 shopify-mcp — FashionOS MCP Server
-Exposes Shopify Admin API as MCP tools for all FashionOS agents.
+Exposes the Shopify Admin API as MCP tools for all FashionOS agents.
 
 Read tools  : list_products, get_product_by_sku, get_price_rules, list_locations,
               get_recent_orders, get_returns, calculate_sales_velocity
 Write tools : update_product_price, set_inventory_level,
-              create_restock_recommendation
+              create_restock_recommendation, create_discount_code
 """
 
 import os
@@ -53,8 +53,9 @@ mcp = FastMCP(
     instructions=(
         "You have access to a Shopify fashion store. "
         "Use these tools to read product, order, inventory, and returns data, "
-        "and to take actions like updating prices or flagging restock needs. "
-        "All write actions are logged. Price values are in the store's native currency."
+        "and to take actions like updating prices, flagging restock needs, or "
+        "creating discount codes. All write actions are logged. "
+        "Price values are in the store's native currency."
     ),
 )
 
@@ -94,6 +95,22 @@ async def _shopify_post(brand_id: str, endpoint: str, payload: dict) -> dict:
         r.raise_for_status()
         return r.json()
 
+
+async def _find_variant_id_by_sku(brand_id: str, sku: str) -> Optional[int]:
+    """Internal helper — same lookup as get_product_by_sku but returns just
+    the variant_id. Kept separate (rather than calling the @mcp.tool()
+    decorated get_product_by_sku directly) so this stays a plain coroutine
+    other tools in this module can safely call."""
+    try:
+        data = await _shopify_get(brand_id, "products.json", {"fields": "id,variants", "limit": 250})
+    except ValueError:
+        return None
+    for product in data.get("products", []):
+        for v in product.get("variants", []):
+            if v.get("sku") == sku:
+                return v["id"]
+    return None
+
 # ── READ TOOLS ────────────────────────────────────────────────────────────────
 
 @mcp.tool()
@@ -109,16 +126,18 @@ async def list_products(brand_id: str, limit: int = 50, status: str = "active") 
     Used by: Inventory Agent, Pricing Agent, Marketing Agent.
     """
     try:
-        data = await _shopify_get(brand_id, "products.json", {"limit": limit, "status": status, "fields": "id,title,status,tags,variants"})
+        data = await _shopify_get(brand_id, "products.json", {"limit": limit, "status": status, "fields": "id,title,status,tags,image,variants"})
     except ValueError as e:
         return [{"error": str(e)}]
     results = []
     for p in data.get("products", []):
+        image = p.get("image") or {}
         results.append({
             "product_id":    p["id"],
             "title":         p["title"],
             "status":        p["status"],
             "tags":          p.get("tags", ""),
+            "image_url":     image.get("src"),
             "variants": [
                 {
                     "variant_id":           v["id"],
@@ -144,20 +163,23 @@ async def get_product_by_sku(brand_id: str, sku: str) -> Optional[dict]:
         brand_id: The ID of the brand to query. 
         sku: The exact SKU string (case-sensitive).
 
-    Returns product + variant details or None if SKU not found.
+    Returns product + variant details (including image_url, useful for
+    Marketing Agent content) or None if SKU not found.
     Used by: all agents when acting on a specific item.
     """
     try:
-        data = await _shopify_get(brand_id, "products.json", {"fields": "id,title,variants", "limit": 250})
+        data = await _shopify_get(brand_id, "products.json", {"fields": "id,title,variants,image", "limit": 250})
     except ValueError as e:
         return {"error": str(e)}
 
     for product in data.get("products", []):
         for v in product.get("variants", []):
             if v.get("sku") == sku:
+                image = product.get("image") or {}
                 return {
                     "product_id":         product["id"],
                     "product_title":      product["title"],
+                    "image_url":          image.get("src"),
                     "variant_id":         v["id"],
                     "sku":                v["sku"],
                     "variant_title":      v["title"],
@@ -177,7 +199,7 @@ async def get_price_rules(brand_id: str, active_only: bool = True) -> list[dict]
                      (started but not yet expired). Default True.
 
     Returns a list of price rules with title, value, and validity window.
-    Used by: Pricing Agent (double-discount prevention).
+    Used by: Sales Agent / Pricing Agent (double-discount prevention).
     """
     from datetime import timezone  # add this import
 
@@ -354,7 +376,7 @@ async def calculate_sales_velocity(brand_id: str, days: int = 14) -> list[dict]:
 
     Returns SKUs sorted by velocity descending.
     This is the primary signal for stockout prediction and pricing decisions.
-    Used by: Inventory Agent, Pricing Agent, Restock Agent.
+    Used by: Inventory Agent, Pricing Agent, Restock Agent, Marketing Agent.
     """
     since = (datetime.now() - timedelta(days=days)).isoformat() + "Z"
     try:
@@ -500,7 +522,11 @@ async def create_restock_recommendation(
         reason:                  Human-readable explanation of why restock is needed.
         supplier_message:        Pre-written WhatsApp/email message to send to supplier.
 
-    Used by: Restock Agent. Human reviews and approves in the dashboard.
+    Used by: Inventory Agent — a lightweight, non-committal flag. For an
+    actual real purchase order the agent now creates one directly via its
+    own create_purchase_order internal tool (agents/inventory/tools.py) +
+    notify_supplier; this tool remains useful when the agent wants to
+    surface something without ordering yet.
     """
     return {
         "type":                    "restock_recommendation",
@@ -513,6 +539,96 @@ async def create_restock_recommendation(
         "supplier_message":        supplier_message,
         "status":                  "pending_approval",
         "created_at":              datetime.now().isoformat() + "Z",
+    }
+
+
+@mcp.tool()
+async def create_discount_code(
+    brand_id: str,
+    code: str,
+    value_type: str,
+    value: float,
+    title: Optional[str] = None,
+    starts_at: Optional[str] = None,
+    ends_at: Optional[str] = None,
+    usage_limit: Optional[int] = None,
+    applies_to_skus: Optional[list[str]] = None,
+    reason: str = "",
+) -> dict:
+    """
+    Create a Shopify discount code (price rule + discount code) — e.g. a
+    flash-sale or win-back promo.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        code: The code customers enter at checkout, e.g. "FLASH20".
+        value_type: "percentage" | "fixed_amount".
+        value: Positive number — percent off (0-100) or currency amount off.
+        title: Internal price rule name. Defaults to `code`.
+        starts_at: ISO8601. Defaults to now.
+        ends_at: ISO8601. Omit for no expiry.
+        usage_limit: Max total redemptions. Omit for unlimited.
+        applies_to_skus: Limit the discount to specific SKUs. Omit to apply store-wide.
+        reason: Why this discount is being created — stored in audit log.
+
+    Returns confirmation with the price_rule_id and discount_code_id.
+    Used by: Sales Agent (win-back/flash-sale promos), Marketing Agent
+    (campaign offers, via Sales — Marketing itself has no Shopify write access).
+    """
+    from datetime import timezone
+
+    if value_type not in ("percentage", "fixed_amount"):
+        return {"error": "value_type must be 'percentage' or 'fixed_amount'."}
+
+    price_rule: dict = {
+        "title": title or code,
+        "target_type": "line_item",
+        "value_type": value_type,
+        "value": f"-{abs(value)}",
+        "customer_selection": "all",
+        "starts_at": starts_at or datetime.now(timezone.utc).isoformat(),
+    }
+    if ends_at:
+        price_rule["ends_at"] = ends_at
+    if usage_limit:
+        price_rule["usage_limit"] = usage_limit
+
+    if applies_to_skus:
+        variant_ids = []
+        for sku in applies_to_skus:
+            vid = await _find_variant_id_by_sku(brand_id, sku)
+            if vid:
+                variant_ids.append(vid)
+        if variant_ids:
+            price_rule["target_selection"] = "entitled"
+            price_rule["entitled_variant_ids"] = variant_ids
+        else:
+            price_rule["target_selection"] = "all"
+    else:
+        price_rule["target_selection"] = "all"
+
+    try:
+        result = await _shopify_post(brand_id, "price_rules.json", {"price_rule": price_rule})
+    except ValueError as e:
+        return {"error": str(e)}
+
+    rule_id = result.get("price_rule", {}).get("id")
+    if not rule_id:
+        return {"error": f"Shopify did not return a price_rule id: {result}"}
+
+    code_result = await _shopify_post(
+        brand_id, f"price_rules/{rule_id}/discount_codes.json", {"discount_code": {"code": code}}
+    )
+
+    return {
+        "success": True,
+        "price_rule_id": rule_id,
+        "discount_code_id": code_result.get("discount_code", {}).get("id"),
+        "code": code,
+        "value_type": value_type,
+        "value": value,
+        "applies_to_skus": applies_to_skus or "store-wide",
+        "reason": reason,
     }
 
 

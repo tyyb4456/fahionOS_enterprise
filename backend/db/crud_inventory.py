@@ -10,9 +10,15 @@ Two kinds of tables live here:
     AgentExecutionLog, AgentMemory) — written only by the agent. This is what
     "Persistence Layer" means in the design doc: we never duplicate Shopify's
     inventory, we store our own decisions.
+
+create_purchase_order + get_supplier_by_id are the operational additions:
+the agent now WRITES a real purchase_orders row (not just a recommendation)
+via agents/inventory/tools.py, mid-ReAct-loop, the same way it corrects
+Shopify stock via set_inventory_level.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -204,6 +210,28 @@ async def find_supplier(session: AsyncSession, brand_id: str, name_or_id: str) -
     }
 
 
+async def get_supplier_by_id(session: AsyncSession, brand_id: str, supplier_id: str) -> Optional[dict]:
+    """Exact-id lookup — used by create_purchase_order, which is handed the
+    supplier_id find_supplier / get_supplier_details already returned."""
+    try:
+        sid = uuid.UUID(supplier_id)
+    except ValueError:
+        return None
+    stmt = select(Supplier).where(Supplier.brand_id == brand_id, Supplier.id == sid)
+    supplier = (await session.execute(stmt)).scalar_one_or_none()
+    if not supplier:
+        return None
+    return {
+        "supplier_id": str(supplier.id),
+        "name": supplier.name,
+        "lead_time_days": supplier.lead_time_days,
+        "minimum_order_qty": supplier.minimum_order_qty,
+        "reliability_score": supplier.reliability_score,
+        "contact_email": supplier.contact_email,
+        "contact_whatsapp": supplier.contact_whatsapp,
+    }
+
+
 async def get_warehouses(session: AsyncSession, brand_id: str, name_filter: Optional[str] = None) -> list[dict]:
     stmt = select(Warehouse).where(Warehouse.brand_id == brand_id)
     if name_filter:
@@ -212,6 +240,26 @@ async def get_warehouses(session: AsyncSession, brand_id: str, name_filter: Opti
         {"name": w.name, "capacity": w.capacity, "current_utilization": w.current_utilization}
         for w in (await session.execute(stmt)).scalars().all()
     ]
+
+
+# ── operational write — a real purchase order, not a recommendation.
+# Caller (agents/inventory/tools.py) commits; this only adds+flushes, same
+# convention as the rest of this file's Step 7 helpers. ────────────────────
+
+async def create_purchase_order(
+    session: AsyncSession, brand_id: str, sku: str, supplier_id: str,
+    quantity: int, expected_delivery: date,
+) -> dict:
+    po = PurchaseOrder(
+        brand_id=brand_id, supplier_id=uuid.UUID(supplier_id), sku=sku,
+        ordered_quantity=quantity, expected_delivery=expected_delivery, status="pending",
+    )
+    session.add(po)
+    await session.flush()
+    return {
+        "purchase_order_id": str(po.id), "sku": sku, "supplier_id": supplier_id,
+        "quantity": quantity, "expected_delivery": expected_delivery.isoformat(), "status": "pending",
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -236,6 +284,7 @@ async def save_forecasts(session: AsyncSession, brand_id: str, forecasts: list[d
 
 async def save_recommendations(session: AsyncSession, brand_id: str, recommendations: list[dict]) -> None:
     for r in recommendations:
+        po_id = r.get("purchase_order_id")
         session.add(ReorderRecommendation(
             brand_id=brand_id,
             sku=r.get("sku", ""),
@@ -244,7 +293,8 @@ async def save_recommendations(session: AsyncSession, brand_id: str, recommendat
             urgency=r.get("urgency", "normal"),
             reason=r.get("reason", ""),
             supplier_message=r.get("supplier_message", ""),
-            status="pending_approval",
+            status=r.get("status", "ordered"),
+            purchase_order_id=uuid.UUID(po_id) if po_id else None,
         ))
     await session.flush()
 
@@ -324,6 +374,7 @@ async def list_recommendations(
             "supplier_id": str(r.supplier_id) if r.supplier_id else None,
             "quantity": r.quantity, "urgency": r.urgency, "reason": r.reason,
             "supplier_message": r.supplier_message, "status": r.status,
+            "purchase_order_id": str(r.purchase_order_id) if r.purchase_order_id else None,
             "created_at": r.created_at.isoformat(),
         }
         for r in (await session.execute(stmt)).scalars().all()

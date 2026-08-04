@@ -72,6 +72,12 @@ class Product(Base):
     status:             Mapped[str]       = mapped_column(String(50), nullable=False, default="active")
     category:           Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     tags:               Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Featured product image — synced from Shopify's `image.src` on
+    # products/update (see api/routers/shopify_webhook.py::_sync_product).
+    # Added for the Marketing Agent, which needs real imagery to publish
+    # Instagram content (see agents/marketing/tools.py::schedule_content /
+    # meta-mcp's publish_instagram_post).
+    image_url:          Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     synced_at:          Mapped[datetime]  = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -263,6 +269,9 @@ class ReorderRecommendation(Base):
     supplier_message: Mapped[str]       = mapped_column(Text, nullable=False, default="")
     status:           Mapped[str]       = mapped_column(String(30), nullable=False, default="pending_approval")
     # pending_approval|approved|rejected|ordered
+    # Real purchase_order this recommendation resulted in, once the agent
+    # actually executes it (see agents/inventory/tools.py::create_purchase_order).
+    purchase_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("purchase_orders.id"), nullable=True)
     created_at:       Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -271,7 +280,7 @@ class InventoryAlert(Base):
 
     id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
-    type:       Mapped[str]       = mapped_column(String(50), nullable=False)   # stockout_risk|overstock|velocity_spike|...
+    type:       Mapped[str]       = mapped_column(String(50), nullable=False)   # stockout_risk|overstock|velocity_spike|sales_agent_flag|...
     severity:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")  # low|medium|high|critical
     sku:        Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
@@ -284,7 +293,7 @@ class AgentExecutionLog(Base):
 
     id:          Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id:    Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
-    agent:       Mapped[str]       = mapped_column(String(100), nullable=False)   # "inventory_agent"
+    agent:       Mapped[str]       = mapped_column(String(100), nullable=False)   # "inventory_agent" | "sales_agent" | "marketing_agent"
     task:        Mapped[str]       = mapped_column(String(100), nullable=False)   # task_type
     status:      Mapped[str]       = mapped_column(String(20), nullable=False)    # running|completed|failed
     duration_ms: Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
@@ -298,8 +307,9 @@ class PolicyDocument(Base):
     """
     Bookkeeping for uploaded policy documents. The `agent` field routes a
     document to the right Chroma collection (inventory_policies_{brand_id}
-    vs sales_policies_{brand_id} — see agents/inventory/memory.py and
-    agents/sales/memory.py) so list/delete know which one to touch.
+    vs sales_policies_{brand_id} vs marketing_policies_{brand_id} — see
+    agents/inventory/memory.py, agents/sales/memory.py,
+    agents/marketing/memory.py) so list/delete know which one to touch.
     """
     __tablename__ = "policy_documents"
 
@@ -387,3 +397,118 @@ class CustomerSegment(Base):
     updated_at:     Mapped[datetime]  = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Marketing Agent outputs — AI-generated campaigns, content, and insights.
+# Product/Sales/Inventory tables above are READ, not owned, by this agent —
+# see agents/marketing/tools.py / db/crud_marketing.py for the cross-agent
+# reads (SalesInsight, SalesReport, CustomerSegment, InventoryAlert,
+# InventoryForecast) that feed its context builder rather than recomputing
+# the same analysis.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MarketingCampaign(Base):
+    __tablename__ = "marketing_campaigns"
+
+    id:               Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:         Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    name:             Mapped[str]       = mapped_column(String(255), nullable=False)
+    goal:             Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    platform:         Mapped[str]       = mapped_column(String(100), nullable=False, default="multi-channel")
+    target_audience:  Mapped[str]       = mapped_column(String(255), nullable=False, default="")
+    budget:           Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    duration_days:    Mapped[int]       = mapped_column(Integer, nullable=False, default=7)
+    status:           Mapped[str]       = mapped_column(String(30), nullable=False, default="draft")
+    # draft|launched|scheduled|completed|paused
+    meta_campaign_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # set once a real Meta Ads campaign exists
+    created_at:       Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ContentPlan(Base):
+    """
+    Weekly content calendar overview — topics + platforms for the week, not
+    individual posts (see ScheduledContent for the operational, per-post
+    record that actually gets executed/published).
+    """
+    __tablename__ = "content_plans"
+
+    id:            Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:      Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    week_start:    Mapped[date]      = mapped_column(Date, nullable=False)
+    topics:        Mapped[list]      = mapped_column(JSON, nullable=False, default=list)
+    platforms:     Mapped[list]      = mapped_column(JSON, nullable=False, default=list)
+    created_at:    Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ScheduledContent(Base):
+    """
+    The operational record behind "Content Scheduler" — one row per post/
+    email/SMS the agent has queued for publishing. Not in the original
+    design doc's table list, but necessary to make scheduling a *real*
+    action rather than a description of one: tasks/marketing_tasks.py's
+    publish_due_content beat job polls this table and calls the matching
+    meta-mcp tool (or, for email/sms, marks it awaiting_integration pending
+    an ESP/SMS gateway — see agents/marketing/prompts.py) once
+    scheduled_for arrives.
+    """
+    __tablename__ = "scheduled_content"
+
+    id:                Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:          Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    campaign_id:       Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("marketing_campaigns.id"), nullable=True)
+    platform:          Mapped[str]       = mapped_column(String(50), nullable=False)   # instagram|facebook|email|sms|tiktok|blog
+    content_type:      Mapped[str]       = mapped_column(String(50), nullable=False)   # post|story|reel|email|sms|blog
+    content:           Mapped[dict]      = mapped_column(JSON, nullable=False, default=dict)  # caption/hashtags/image_url/subject/body/cta/sms_text
+    scheduled_for:     Mapped[datetime]  = mapped_column(DateTime(timezone=True), nullable=False)
+    status:            Mapped[str]       = mapped_column(String(20), nullable=False, default="scheduled")
+    # scheduled|published|failed|awaiting_integration
+    published_ref_id:  Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # e.g. Instagram media_id
+    error:             Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at:        Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    published_at:      Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MarketingInsight(Base):
+    __tablename__ = "marketing_insights"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    insight:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    priority:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")  # low|medium|high
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AudienceSegment(Base):
+    """
+    Marketing's own audience/targeting notes — distinct from Sales'
+    CustomerSegment (RFM buckets with concrete customer_ids). This is the
+    agent's qualitative read on which segment to target for a given goal
+    and how it's performed historically, e.g. "VIP customers respond best
+    to early-access drops, not discounts."
+    """
+    __tablename__ = "audience_segments"
+
+    id:                Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:          Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    segment:           Mapped[str]       = mapped_column(String(100), nullable=False)
+    description:       Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    campaign_success:  Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    updated_at:        Mapped[datetime]  = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ContentPerformance(Base):
+    __tablename__ = "content_performance"
+
+    id:                   Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:             Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    scheduled_content_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("scheduled_content.id"), nullable=True)
+    platform:             Mapped[str]       = mapped_column(String(50), nullable=False)
+    engagement:           Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    ctr:                  Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    conversion:           Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    roas:                 Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    recorded_at:          Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

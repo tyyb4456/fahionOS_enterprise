@@ -23,4 +23,16 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.sales_tasks.run_sales_agent_for_all_brands",
         "schedule": crontab(hour=6, minute=15),  # 06:15 UTC — right after inventory
     },
+    "daily-marketing-planning": {
+        "task": "tasks.marketing_tasks.run_marketing_agent_for_all_brands",
+        "schedule": crontab(hour=6, minute=30),  # 06:30 UTC — after sales, so it can read fresh insights
+    },
+    "publish-due-marketing-content": {
+        "task": "tasks.marketing_tasks.publish_due_content_for_all_brands",
+        "schedule": crontab(minute="*/15"),  # every 15 min — turns schedule_content() into a real post
+    },
+    "sync-marketing-content-performance": {
+        "task": "tasks.marketing_tasks.sync_content_performance_for_all_brands",
+        "schedule": crontab(hour="*/6", minute=45),  # every 6 hours
+    },
 }

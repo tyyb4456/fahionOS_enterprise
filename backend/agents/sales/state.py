@@ -8,7 +8,7 @@ of Inventory's.
 from typing import Any, Dict, List, Optional, Annotated, Literal
 from typing_extensions import TypedDict
 
-from langgraph.graph.message import add_messages
+from langgraph.graph import MessagesState
 
 
 class SalesTask(TypedDict, total=False):
@@ -74,7 +74,7 @@ class CustomerSegmentOut(TypedDict, total=False):
     customer_ids: List[str]
 
 
-class SalesPipelineState(TypedDict, total=False):
+class SalesPipelineState(MessagesState, total=False):
     # ── identity ──────────────────────────────────────────────────────────
     brand_id: str
 
@@ -84,8 +84,7 @@ class SalesPipelineState(TypedDict, total=False):
     # ── step 1 + 3: context builder + RAG snapshot ───────────────────────
     context: SalesBusinessContext
 
-    # ── step 4: ReAct loop transcript (LangGraph message state) ──────────
-    messages: Annotated[List[Any], add_messages]
+
     tools_used: List[str]
 
     # ── step 5/6: decision generator output ───────────────────────────────

@@ -89,6 +89,10 @@ async def _sync_product(session: AsyncSession, brand_id: str, payload: dict) -> 
 
     product.status = payload.get("status", product.status)
     product.tags = payload.get("tags", product.tags)
+    # Featured image — used by the Marketing Agent to publish real
+    # Instagram content (see db/models.py::Product.image_url docstring).
+    image = payload.get("image") or {}
+    product.image_url = image.get("src") or product.image_url
     product.synced_at = datetime.now(timezone.utc)
 
     for v in payload.get("variants", []):

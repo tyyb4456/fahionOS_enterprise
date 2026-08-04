@@ -10,7 +10,7 @@ only `task`, the tool set, and the output fields change per agent.
 from typing import Any, Dict, List, Optional, Annotated, Literal
 from typing_extensions import TypedDict
 
-from langgraph.graph.message import add_messages
+from langgraph.graph import MessagesState
 
 
 class InventoryTask(TypedDict, total=False):
@@ -65,7 +65,7 @@ class AlertOut(TypedDict, total=False):
     message: str
 
 
-class InventoryPipelineState(TypedDict, total=False):
+class InventoryPipelineState(MessagesState, total=False):
     # ── identity ──────────────────────────────────────────────────────────
     brand_id: str
 
@@ -75,8 +75,7 @@ class InventoryPipelineState(TypedDict, total=False):
     # ── step 1 + 3: context builder + RAG snapshot ───────────────────────
     context: BusinessContext
 
-    # ── step 4: ReAct loop transcript (LangGraph message state) ──────────
-    messages: Annotated[List[Any], add_messages]
+    # ── step 4: tool used ────────────────────────────────────────────
     tools_used: List[str]
 
     # ── step 5/6: decision generator output ───────────────────────────────

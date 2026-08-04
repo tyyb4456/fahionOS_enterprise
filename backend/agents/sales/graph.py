@@ -28,7 +28,7 @@ from typing import Any
 
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, StateGraph
-from deepagents import create_deep_agent
+from deepagents import CompiledSubAgent, create_deep_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
 
@@ -239,3 +239,13 @@ async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
         "next_actions": final_state.get("next_actions", []),
         "duration_ms": round(duration_ms, 1),
     }
+
+
+sales_agent = CompiledSubAgent(
+    name="sales_agent",
+    description=(
+        "Sales & revenue analysis agent. Analyzes daily sales trends, calculates KPIs (AOV, Conversion), "
+        "detects revenue anomalies, and segments customer cohorts."
+    ),
+    runnable=get_sales_graph()
+)

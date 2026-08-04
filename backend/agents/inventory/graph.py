@@ -7,7 +7,8 @@ Flow (see design doc):
         -> reason           (Steps 2-4 — ReAct loop; tools = live Shopify
                               data via shopify-mcp + forecasting + supplier/
                               warehouse lookups + RAG (policies + past run
-                              notes), all called on demand)
+                              notes) + real actions (create_purchase_order,
+                              notify_supplier), all called on demand)
         -> extract_decision (Step 5/6 — condense the transcript into the
                               structured AgentDecision)
         -> persist          (Step 7 — write forecasts/recommendations/alerts
@@ -20,6 +21,11 @@ what the agent ends up needing; a targeted retrieve_policy("ABC Textile
 reorder terms") call once the agent has seen a real low-stock SKU and
 supplier beats a canned query every time, and skips the round-trip
 entirely on runs where policy context doesn't end up mattering.
+
+Operational note: create_purchase_order and notify_supplier make real,
+immediate changes mid-loop (a purchase_orders row, an outbound message) —
+same pattern as shopify-mcp's set_inventory_level. This agent is no longer
+"recommend, don't act"; see agents/inventory/prompts.py.
 """
 from __future__ import annotations
 
@@ -32,6 +38,7 @@ from langgraph.graph import END, StateGraph
 from deepagents import create_deep_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
+from deepagents import CompiledSubAgent
 
 from db import crud_inventory as crud
 from db.session import AsyncSessionLocal
@@ -90,7 +97,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
 
 async def extract_decision_node(state: InventoryPipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
-    model = init_chat_model("google_genai:gemini-3.6-flash")
+    model = init_chat_model("google_genai:gemini-3.6-flash").with_structured_output(AgentDecision)
 
     transcript = "\n".join(
         f"{getattr(m, 'type', 'message')}: {m.content}"
@@ -99,13 +106,16 @@ async def extract_decision_node(state: InventoryPipelineState) -> dict:
     )
 
     decision: AgentDecision = await model.ainvoke(
-        "Based on this analysis, produce the final structured inventory decision:\n\n" + transcript
+        "Based on this analysis and its tool-call results, produce the final structured "
+        "inventory decision. In actions_executed, list only things that actually happened "
+        "(a tool call succeeded) — not things merely proposed:\n\n" + transcript
     )
 
     return {
         "forecasts": [f.model_dump() for f in decision.forecasts],
         "recommendations": [r.model_dump() for r in decision.recommendations],
         "alerts": [a.model_dump() for a in decision.alerts],
+        "actions_executed": decision.actions_executed,
         "summary": decision.summary,
         "confidence": decision.confidence,
         "next_actions": decision.next_actions,
@@ -215,8 +225,22 @@ async def run_inventory_agent(brand_id: str, task: dict) -> dict[str, Any]:
         "alerts": alerts,
         "recommendations": final_state.get("recommendations", []),
         "forecasts": final_state.get("forecasts", []),
+        "actions_executed": final_state.get("actions_executed", []),
         "db_updates": final_state.get("db_updates", []),
         "confidence": final_state.get("confidence", 0.0),
         "next_actions": final_state.get("next_actions", []),
         "duration_ms": round(duration_ms, 1),
     }
+
+
+inventory_agent = CompiledSubAgent(
+    name="inventory_agent",
+    description=(
+        "Autonomous inventory and supply chain agent. Responsible for forecasting SKU demand, "
+        "detecting stockout risks, calculating safety stock and reorder quantities, looking up supplier "
+        "terms & warehouse capacity, issuing purchase orders, and sending automated supplier notifications. "
+        "Pass task dict containing 'task_type' (e.g. 'forecast_inventory', 'check_stockouts', 'reorder_analysis', "
+        "'overstock_analysis', or 'full_inventory_review'), 'brand_id', and optional parameters like 'forecast_days' or 'sku'."
+    ),
+    runnable=get_inventory_graph()
+)
