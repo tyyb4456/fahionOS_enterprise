@@ -6,6 +6,9 @@ knowledge base later) can use this.
 from __future__ import annotations
 
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
 
@@ -18,6 +21,7 @@ def extract_text(filename: str, content: bytes) -> str:
     """Extract plain text from an uploaded file's raw bytes, dispatching on
     its extension."""
     ext = _extension(filename)
+    logger.info("Extracting text from filename='%s' (extension='%s', size=%d bytes)", filename, ext, len(content))
 
     if ext == ".pdf":
         return _extract_pdf(content)
@@ -26,6 +30,7 @@ def extract_text(filename: str, content: bytes) -> str:
     if ext in (".txt", ".md"):
         return content.decode("utf-8", errors="replace")
 
+    logger.error("Unsupported document type '%s' for filename='%s'", ext, filename)
     raise UnsupportedDocumentType(
         f"'{ext}' isn't supported. Supported types: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
     )

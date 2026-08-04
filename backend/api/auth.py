@@ -58,10 +58,12 @@ async def get_current_brand(
         raise HTTPException(status_code=401, detail="Authentication failed.")
 
     if not state.is_signed_in:
+        logger.error("Authentication attempt rejected: Request is not signed in")
         raise HTTPException(status_code=401, detail="Not authenticated.")
 
     clerk_user_id = state.payload.get("sub")
     if not clerk_user_id:
+        logger.error("Authentication attempt rejected: sub claim missing in Clerk payload")
         raise HTTPException(status_code=401, detail="Invalid token.")
 
     brand = (await session.execute(
@@ -69,14 +71,17 @@ async def get_current_brand(
     )).scalar_one_or_none()
 
     if not brand:
+        logger.error("Authentication failed: No brand found for clerk_user_id=%s", clerk_user_id)
         raise HTTPException(
             status_code=404,
             detail="No brand found. Complete onboarding first.",
         )
 
     if not brand.is_active:
+        logger.error("Authentication failed: Brand brand_id=%s is inactive", brand.brand_id)
         raise HTTPException(status_code=403, detail="Brand account is inactive.")
 
+    logger.info("Successfully authenticated brand_id=%s for clerk_user_id=%s", brand.brand_id, clerk_user_id)
     return brand
 
 
@@ -84,6 +89,9 @@ def require_admin(
     x_admin_secret: str = Header("", alias="X-Admin-Secret"),
 ) -> None:
     if not ADMIN_SECRET:
+        logger.error("Admin request failed: FASHIONOS_ADMIN_SECRET is not configured on server")
         raise HTTPException(500, "FASHIONOS_ADMIN_SECRET not configured.")
     if x_admin_secret != ADMIN_SECRET:
+        logger.error("Admin request failed: Invalid admin secret provided")
         raise HTTPException(403, "Invalid admin secret.")
+    logger.info("Admin authentication successful")

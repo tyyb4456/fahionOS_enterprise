@@ -11,10 +11,13 @@ render a rich card when conversation history is reloaded, not just prose.
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncGenerator
 
 from pydantic import BaseModel as _PydanticBase
 from requests import session
+
+logger = logging.getLogger(__name__)
 
 from deep_agent.runtime import get_cached_agent
 
@@ -70,7 +73,7 @@ async def _save_reasoning(
 
             await session.commit()
     except Exception as exc:
-        print(f"[Streaming] ⚠ Failed to persist reasoning: {exc}")
+        logger.error("Failed to persist reasoning for thread=%s: %s", thread_id, exc)
 
 
 async def _save_tool_result(
@@ -128,12 +131,13 @@ async def _save_tool_result(
             ))
             await session.commit()
     except Exception as exc:
-        print(f"[Streaming] ⚠ Failed to persist tool result ({tool_name} seq={call_seq}): {exc}")
+        logger.error("Failed to persist tool result (%s seq=%d) for thread=%s: %s", tool_name, call_seq, thread_id, exc)
 
 
 # ── Non-streaming chat ──────────────────────────────────────────────────────
 
 async def chat(brand_id: str, brand_name: str, message: str, thread_id: str = "default") -> str:
+    logger.info("Non-streaming chat for brand=%s thread=%s", brand_id, thread_id)
     agent         = await get_cached_agent(brand_id, brand_name)
     scoped_thread = f"{brand_id}:{thread_id}"
     config        = {"configurable": {"thread_id": scoped_thread}}
@@ -166,6 +170,7 @@ async def stream_chat(
       {"type": "done"}
       {"type": "error",       "content": "..."}
     """
+    logger.info("Streaming chat for brand=%s thread=%s", brand_id, thread_id)
     agent         = await get_cached_agent(brand_id, brand_name)
     scoped_thread = f"{brand_id}:{thread_id}"
     config        = {"configurable": {"thread_id": scoped_thread}}

@@ -4,8 +4,7 @@ live Shopify call (those come from shopify-mcp, see mcp_client.py). Each
 factory below binds `brand_id` in a closure so the LLM never has to supply
 it — same reasoning as agents/common/tool_scoping.py.
 """
-from __future__ import annotations
-
+import logging
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
@@ -14,6 +13,8 @@ from db.session import AsyncSessionLocal
 
 from . import analytics
 from . import memory as rag
+
+logger = logging.getLogger(__name__)
 
 
 def build_internal_tools(brand_id: str) -> list[StructuredTool]:

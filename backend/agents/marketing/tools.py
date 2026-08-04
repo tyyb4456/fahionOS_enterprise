@@ -18,8 +18,7 @@ Four flavors of tool live here:
     change real state immediately, mid-loop, the same way Shopify's
     set_inventory_level does, rather than waiting for persist_node
 """
-from __future__ import annotations
-
+import logging
 import os
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -35,6 +34,8 @@ from agents.common.notify_tools import make_notify_brand_owner_tool
 
 from . import analytics
 from . import memory as rag
+
+logger = logging.getLogger(__name__)
 
 MARKETING_CONTENT_MODEL = os.getenv("MARKETING_CONTENT_MODEL", "claude-sonnet-5")
 

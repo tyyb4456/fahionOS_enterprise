@@ -54,10 +54,13 @@ async def send_whatsapp(to: str, message: str) -> dict:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(url, headers=headers, json=payload)
     except httpx.HTTPError as e:
+        logger.error("[notify:whatsapp] Failed HTTP request to %s: %s", to, e)
         return {"sent": False, "channel": "whatsapp", "to": to, "error": str(e)}
 
     if r.is_success:
+        logger.info("[notify:whatsapp] Sent message successfully to %s", to)
         return {"sent": True, "channel": "whatsapp", "to": to}
+    logger.error("[notify:whatsapp] API returned error for %s: %s", to, r.text)
     return {"sent": False, "channel": "whatsapp", "to": to, "error": r.text}
 
 
@@ -86,8 +89,11 @@ async def send_email(to: str, subject: str, body: str) -> dict:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(url, headers=headers, json=payload)
     except httpx.HTTPError as e:
+        logger.error("[notify:email] Failed HTTP request to %s: %s", to, e)
         return {"sent": False, "channel": "email", "to": to, "error": str(e)}
 
     if r.is_success:
+        logger.info("[notify:email] Sent email successfully to %s", to)
         return {"sent": True, "channel": "email", "to": to}
-    return {"sent": False, "channel": "email", "to": to, "error": r.text}
+    logger.error("[notify:email] API returned error for %s: %s", to, r.text)
+    return {"sent": False, "channel": "email", "to": to, "error": r.text}

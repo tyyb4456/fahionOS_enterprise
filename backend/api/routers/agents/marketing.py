@@ -13,6 +13,7 @@ Wire into your app with:
     from api.routers.agents import marketing as marketing_agent
     app.include_router(marketing_agent.router)
 """
+import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
@@ -24,6 +25,8 @@ from api.auth import get_current_brand
 from db import crud_marketing as crud
 from db.models import Brand
 from db.session import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agents/marketing", tags=["marketing-agent"])
 
@@ -42,9 +45,16 @@ async def trigger_marketing_agent(
     req: RunMarketingAgentRequest,
     brand: Brand = Depends(get_current_brand),
 ):
+    logger.info("API trigger marketing agent for brand_id=%s, task_type=%s", brand.brand_id, req.task_type)
     task = req.model_dump(exclude_none=True)
     task["trigger"] = "manual"
-    return await run_marketing_agent(brand.brand_id, task)
+    try:
+        res = await run_marketing_agent(brand.brand_id, task)
+        logger.info("Completed API trigger marketing agent for brand_id=%s", brand.brand_id)
+        return res
+    except Exception:
+        logger.exception("Failed API trigger marketing agent for brand_id=%s", brand.brand_id)
+        raise
 
 
 @router.get("/campaigns")
@@ -52,6 +62,7 @@ async def list_campaigns(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing marketing campaigns for brand_id=%s", brand.brand_id)
     return await crud.list_campaigns(session, brand.brand_id)
 
 
@@ -60,6 +71,7 @@ async def list_content_plans(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing marketing content plans for brand_id=%s", brand.brand_id)
     return await crud.list_content_plans(session, brand.brand_id)
 
 
@@ -69,6 +81,7 @@ async def list_scheduled_content(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing marketing scheduled content for brand_id=%s, status=%s", brand.brand_id, status)
     return await crud.list_scheduled_content(session, brand.brand_id, status=status)
 
 
@@ -77,6 +90,7 @@ async def list_insights(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing marketing insights for brand_id=%s", brand.brand_id)
     return await crud.list_marketing_insights(session, brand.brand_id)
 
 
@@ -85,6 +99,7 @@ async def list_audience_segments(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing marketing audience segments for brand_id=%s", brand.brand_id)
     return await crud.list_audience_segments(session, brand.brand_id)
 
 
@@ -93,4 +108,5 @@ async def list_content_performance(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
-    return await crud.list_content_performance(session, brand.brand_id)
+    logger.info("Listing marketing content performance for brand_id=%s", brand.brand_id)
+    return await crud.list_content_performance(session, brand.brand_id)

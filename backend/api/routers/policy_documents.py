@@ -13,6 +13,7 @@ DELETE /api/v1/brands/me/policies/{agent}/{id}     → remove a document + its c
 
 agent: "inventory" | "sales"
 """
+import logging
 import uuid
 from typing import Literal
 
@@ -25,6 +26,8 @@ from db.models import Brand
 from db.session import get_session
 from documents.chunking import chunk_text
 from documents.parsing import UnsupportedDocumentType, extract_text
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/brands/me/policies", tags=["policy-documents"])
 
@@ -48,21 +51,26 @@ async def upload_policy_document(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Uploading policy document filename=%s for agent=%s, brand_id=%s", file.filename, agent, brand.brand_id)
     rag = _rag_module(agent)
     content = await file.read()
     if len(content) > MAX_UPLOAD_BYTES:
+        logger.error("Upload policy failed: file size %d exceeds limit %d", len(content), MAX_UPLOAD_BYTES)
         raise HTTPException(413, f"File exceeds {MAX_UPLOAD_BYTES // (1024*1024)}MB limit.")
 
     try:
         text = extract_text(file.filename, content)
     except UnsupportedDocumentType as e:
+        logger.error("Upload policy failed: unsupported file type for filename=%s", file.filename)
         raise HTTPException(400, str(e))
 
     if not text.strip():
+        logger.error("Upload policy failed: no extractable text found in filename=%s", file.filename)
         raise HTTPException(400, "No extractable text found in this file.")
 
     chunks = chunk_text(text)
     if not chunks:
+        logger.error("Upload policy failed: text extracted but 0 chunks produced for filename=%s", file.filename)
         raise HTTPException(400, "Text extracted but produced no usable chunks.")
 
     document_id = uuid.uuid4()
@@ -72,6 +80,7 @@ async def upload_policy_document(
     )
     await session.commit()
 
+    logger.info("Successfully uploaded and indexed policy document id=%s, filename=%s, chunks=%d for agent=%s", record.id, record.filename, indexed, agent)
     return {"id": str(record.id), "agent": agent, "filename": record.filename, "chunks_indexed": indexed}
 
 
@@ -81,6 +90,7 @@ async def list_policy_documents(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing policy documents for agent=%s, brand_id=%s", agent, brand.brand_id)
     return await crud.list_policy_documents(session, brand.brand_id, agent=agent)
 
 
@@ -91,11 +101,14 @@ async def delete_policy_document(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Deleting policy document id=%s for agent=%s, brand_id=%s", document_id, agent, brand.brand_id)
     record = await crud.get_policy_document(session, brand.brand_id, document_id, agent=agent)
     if not record:
+        logger.error("Delete policy failed: document_id=%s not found", document_id)
         raise HTTPException(404, "Policy document not found.")
 
     rag = _rag_module(agent)
     await rag.delete_policy_document(brand.brand_id, document_id=str(record.id))
     await crud.delete_policy_document_record(session, record)
     await session.commit()
+    logger.info("Successfully deleted policy document id=%s", document_id)

@@ -8,6 +8,7 @@ Setup in Clerk Dashboard:
   Copy Signing Secret → CLERK_WEBHOOK_SECRET in .env
 """
 
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -20,6 +21,8 @@ from svix.webhooks import Webhook, WebhookVerificationError
 from db.models import Brand
 from db.session import get_session
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/clerk", tags=["clerk"])
 
 CLERK_WEBHOOK_SECRET = os.getenv("CLERK_WEBHOOK_SECRET", "")
@@ -27,10 +30,12 @@ CLERK_WEBHOOK_SECRET = os.getenv("CLERK_WEBHOOK_SECRET", "")
 
 def _verify(payload: bytes, headers: dict) -> dict:
     if not CLERK_WEBHOOK_SECRET:
+        logger.error("Clerk webhook verification failed: CLERK_WEBHOOK_SECRET not configured")
         raise HTTPException(500, "CLERK_WEBHOOK_SECRET not configured.")
     try:
         return Webhook(CLERK_WEBHOOK_SECRET).verify(payload, headers)
     except WebhookVerificationError:
+        logger.error("Clerk webhook verification failed: Invalid signature")
         raise HTTPException(400, "Invalid webhook signature.")
 
 
@@ -63,6 +68,8 @@ async def clerk_webhook(
     user       = event.get("data", {})
     clerk_id   = user.get("id")
 
+    logger.info("Received Clerk webhook event: type=%s, clerk_id=%s", event_type, clerk_id)
+
     # ── user.created → auto-provision Brand ───────────────────────────────────
     if event_type == "user.created":
         existing = (await session.execute(
@@ -84,7 +91,9 @@ async def clerk_webhook(
                 is_active     = True,
             ))
             await session.flush()
-            print(f"[Clerk] ✓ Brand created: {brand_id} ({email})")
+            logger.info("Auto-provisioned brand_id=%s for email=%s via Clerk webhook", brand_id, email)
+        else:
+            logger.info("Brand for clerk_id=%s already exists, skipping creation", clerk_id)
 
     # ── user.updated → sync email/name ────────────────────────────────────────
     elif event_type == "user.updated":
@@ -95,6 +104,7 @@ async def clerk_webhook(
         if brand:
             brand.owner_email = _extract_email(user) or brand.owner_email
             brand.updated_at  = datetime.now(timezone.utc)
+            logger.info("Updated email/info for brand_id=%s via Clerk webhook", brand.brand_id)
 
     # ── user.deleted → deactivate ──────────────────────────────────────────────
     elif event_type == "user.deleted":
@@ -105,6 +115,6 @@ async def clerk_webhook(
         if brand:
             brand.is_active  = False
             brand.updated_at = datetime.now(timezone.utc)
-            print(f"[Clerk] ✓ Brand deactivated: {brand.brand_id}")
+            logger.info("Deactivated brand_id=%s via Clerk webhook", brand.brand_id)
 
-    return {"received": True, "type": event_type}
+    return {"received": True, "type": event_type}

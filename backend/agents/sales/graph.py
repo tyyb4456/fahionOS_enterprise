@@ -22,9 +22,15 @@ past-run context.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any
+
+from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+load_dotenv()
 
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, StateGraph
@@ -50,7 +56,8 @@ from .tools import build_internal_tools
 
 async def build_context_node(state: SalesPipelineState) -> dict:
     brand_id = state["brand_id"]
-    task_obj = state["task", {}]
+    logger.info("[SalesAgent] Building business context for brand_id=%s", brand_id)
+    task_obj = state.get("task", {})
     time_range = task_obj.get("time_range", "last_7_days") if isinstance(task_obj, dict) else "last_7_days"
     async with AsyncSessionLocal() as session:
         context = await crud.get_business_context(session, brand_id, time_range=time_range)
@@ -59,6 +66,7 @@ async def build_context_node(state: SalesPipelineState) -> dict:
 
 async def reasoning_node(state: SalesPipelineState) -> dict:
     brand_id = state["brand_id"]
+    logger.info("[SalesAgent] Running reasoning node for brand_id=%s", brand_id)
 
     shopify_tools = scope_tools_to_brand(await get_shopify_read_tools(), brand_id)
     internal_tools = build_internal_tools(brand_id)
@@ -93,11 +101,13 @@ async def reasoning_node(state: SalesPipelineState) -> dict:
         for call in (getattr(message, "tool_calls", None) or [])
     })
 
+    logger.info("[SalesAgent] Reasoning node finished for brand_id=%s. Tools used: %s", brand_id, tools_used)
     return {"messages": result["messages"], "tools_used": tools_used}
 
 
 async def extract_decision_node(state: SalesPipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
+    logger.info("[SalesAgent] Extracting structured decision for brand_id=%s", state["brand_id"])
     model = init_chat_model("google_genai:gemini-3.6-flash")
 
     transcript = "\n".join(
@@ -110,6 +120,7 @@ async def extract_decision_node(state: SalesPipelineState) -> dict:
         "Based on this analysis, produce the final structured sales decision:\n\n" + transcript
     )
 
+    logger.info("[SalesAgent] Decision extracted for brand_id=%s: summary=%s", state["brand_id"], decision.summary[:100] if decision.summary else "")
     return {
         "kpis": decision.kpis.model_dump(),
         "insights": [i.model_dump() for i in decision.insights],
@@ -125,7 +136,7 @@ async def extract_decision_node(state: SalesPipelineState) -> dict:
 
 async def persist_node(state: SalesPipelineState) -> dict:
     brand_id = state["brand_id"]
-    task_obj = state["task", {}]
+    task_obj = state.get("task", {})
     period = task_obj.get("time_range", "last_7_days") if isinstance(task_obj, dict) else "last_7_days"
 
     kpis = state.get("kpis", {})
@@ -135,6 +146,7 @@ async def persist_node(state: SalesPipelineState) -> dict:
     customer_segments = state.get("customer_segments", [])
     summary = state.get("summary", "")
 
+    logger.info("[SalesAgent] Persisting outputs for brand_id=%s (insights=%d, forecasts=%d, anomalies=%d, segments=%d)", brand_id, len(insights), len(forecasts), len(anomalies), len(customer_segments))
     async with AsyncSessionLocal() as session:
         await crud.save_sales_report(session, brand_id, period, summary, kpis)
         if insights:
@@ -204,6 +216,7 @@ async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
     Returns the structured object handed back to the supervisor.
     """
     start = time.perf_counter()
+    logger.info("[SalesAgent] Starting agent run for brand_id=%s, task=%s", brand_id, task)
     graph = get_sales_graph()
     initial_state: SalesPipelineState = {
         "brand_id": brand_id,
@@ -216,6 +229,7 @@ async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
         final_state = await graph.ainvoke(initial_state)
     except Exception as exc:
         duration_ms = (time.perf_counter() - start) * 1000
+        logger.exception("[SalesAgent] Run failed for brand_id=%s after %.1f ms", brand_id, duration_ms)
         async with AsyncSessionLocal() as session:
             await crud.log_execution(
                 session, brand_id, "sales_agent", task.get("task_type", "unknown"),
@@ -226,6 +240,7 @@ async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
         raise
 
     duration_ms = (time.perf_counter() - start) * 1000
+    logger.info("[SalesAgent] Run completed successfully for brand_id=%s in %.1f ms", brand_id, duration_ms)
     async with AsyncSessionLocal() as session:
         await crud.log_execution(
             session, brand_id, "sales_agent", task.get("task_type", "unknown"),
@@ -249,6 +264,7 @@ async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
         "next_actions": final_state.get("next_actions", []),
         "duration_ms": round(duration_ms, 1),
     }
+
 
 
 sales_agent = CompiledSubAgent(

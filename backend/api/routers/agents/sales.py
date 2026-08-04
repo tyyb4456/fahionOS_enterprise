@@ -12,6 +12,7 @@ Wire into your app with:
     from api.routers.agents import sales as sales_agent
     app.include_router(sales_agent.router)
 """
+import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
@@ -23,6 +24,8 @@ from api.auth import get_current_brand
 from db import crud_sales as crud
 from db.models import Brand
 from db.session import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agents/sales", tags=["sales-agent"])
 
@@ -40,9 +43,16 @@ async def trigger_sales_agent(
     req: RunSalesAgentRequest, 
     brand: Brand = Depends(get_current_brand)
 ):
+    logger.info("API trigger sales agent for brand_id=%s, task_type=%s", brand.brand_id, req.task_type)
     task = req.model_dump(exclude_none=True)
     task["trigger"] = "manual"
-    return await run_sales_agent(brand.brand_id, task)
+    try:
+        res = await run_sales_agent(brand.brand_id, task)
+        logger.info("Completed API trigger sales agent for brand_id=%s", brand.brand_id)
+        return res
+    except Exception:
+        logger.exception("Failed API trigger sales agent for brand_id=%s", brand.brand_id)
+        raise
 
 
 @router.get("/insights")
@@ -50,6 +60,7 @@ async def list_insights(
     brand: Brand = Depends(get_current_brand), 
     session: AsyncSession = Depends(get_session)
 ):
+    logger.info("Listing sales insights for brand_id=%s", brand.brand_id)
     return await crud.list_insights(session, brand.brand_id)
 
 
@@ -58,6 +69,7 @@ async def list_reports(
     brand: Brand = Depends(get_current_brand), 
     session: AsyncSession = Depends(get_session)
 ):
+    logger.info("Listing sales reports for brand_id=%s", brand.brand_id)
     return await crud.list_reports(session, brand.brand_id)
 
 
@@ -66,6 +78,7 @@ async def list_forecasts(
     brand: Brand = Depends(get_current_brand), 
     session: AsyncSession = Depends(get_session)
 ):
+    logger.info("Listing sales forecasts for brand_id=%s", brand.brand_id)
     return await crud.list_forecasts(session, brand.brand_id)
 
 
@@ -74,6 +87,7 @@ async def list_anomalies(
     brand: Brand = Depends(get_current_brand), 
     session: AsyncSession = Depends(get_session)
 ):
+    logger.info("Listing sales anomalies for brand_id=%s", brand.brand_id)
     return await crud.list_anomalies(session, brand.brand_id)
 
 
@@ -82,4 +96,5 @@ async def list_customer_segments(
     brand: Brand = Depends(get_current_brand), 
     session: AsyncSession = Depends(get_session)
 ):
+    logger.info("Listing sales customer segments for brand_id=%s", brand.brand_id)
     return await crud.list_customer_segments(session, brand.brand_id)

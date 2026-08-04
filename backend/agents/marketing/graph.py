@@ -30,9 +30,15 @@ the design doc's "Execution Policy Layer") but intentionally not built
 yet — this agent runs fully autonomously for now.
 """
 from __future__ import annotations
-
+import logging
+import os
 import time
 from typing import Any
+
+from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+load_dotenv()
 
 from langgraph.graph import END, StateGraph
 from deepagents import CompiledSubAgent, create_deep_agent
@@ -55,6 +61,7 @@ from .tools import build_internal_tools
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def build_context_node(state: MarketingPipelineState) -> dict:
+    logger.info("[MarketingAgent] Building business context for brand_id=%s", state["brand_id"])
     async with AsyncSessionLocal() as session:
         context = await crud.get_business_context(session, state["brand_id"])
     return {"context": context}
@@ -62,6 +69,7 @@ async def build_context_node(state: MarketingPipelineState) -> dict:
 
 async def reasoning_node(state: MarketingPipelineState) -> dict:
     brand_id = state["brand_id"]
+    logger.info("[MarketingAgent] Running reasoning node for brand_id=%s", brand_id)
 
     live_tools = scope_tools_to_brand(await get_marketing_tools(), brand_id)
     internal_tools = build_internal_tools(brand_id)
@@ -96,11 +104,13 @@ async def reasoning_node(state: MarketingPipelineState) -> dict:
         for call in (getattr(message, "tool_calls", None) or [])
     })
 
+    logger.info("[MarketingAgent] Reasoning node finished for brand_id=%s. Tools used: %s", brand_id, tools_used)
     return {"messages": result["messages"], "tools_used": tools_used}
 
 
 async def extract_decision_node(state: MarketingPipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
+    logger.info("[MarketingAgent] Extracting structured decision for brand_id=%s", state["brand_id"])
     model = init_chat_model("google_genai:gemini-3.6-flash").with_structured_output(MarketingDecision)
 
     transcript = "\n".join(
@@ -115,6 +125,7 @@ async def extract_decision_node(state: MarketingPipelineState) -> dict:
         "(a tool call succeeded) — not things merely proposed:\n\n" + transcript
     )
 
+    logger.info("[MarketingAgent] Decision extracted for brand_id=%s: summary=%s", state["brand_id"], decision.summary[:100] if decision.summary else "")
     return {
         "campaigns": [c.model_dump() for c in decision.campaigns],
         "content": [c.model_dump() for c in decision.content],
@@ -137,6 +148,7 @@ async def persist_node(state: MarketingPipelineState) -> dict:
     topics = sorted({c.get("goal", "") for c in campaigns if c.get("goal")})
     platforms = sorted({c.get("platform", "") for c in campaigns if c.get("platform")})
 
+    logger.info("[MarketingAgent] Persisting outputs for brand_id=%s (campaigns=%d, insights=%d, audience_recs=%d)", brand_id, len(campaigns), len(insights), len(audience_recommendations))
     async with AsyncSessionLocal() as session:
         campaign_ids = await crud.save_campaigns(session, brand_id, campaigns)
         if topics or platforms:
@@ -203,6 +215,7 @@ async def run_marketing_agent(brand_id: str, task: dict) -> dict[str, Any]:
     Returns the structured object handed back to the supervisor.
     """
     start = time.perf_counter()
+    logger.info("[MarketingAgent] Starting agent run for brand_id=%s, task=%s", brand_id, task)
     graph = get_marketing_graph()
     initial_state: MarketingPipelineState = {
         "brand_id": brand_id,
@@ -215,6 +228,7 @@ async def run_marketing_agent(brand_id: str, task: dict) -> dict[str, Any]:
         final_state = await graph.ainvoke(initial_state)
     except Exception as exc:
         duration_ms = (time.perf_counter() - start) * 1000
+        logger.exception("[MarketingAgent] Run failed for brand_id=%s after %.1f ms", brand_id, duration_ms)
         async with AsyncSessionLocal() as session:
             await crud.log_execution(
                 session, brand_id, "marketing_agent", task.get("task_type", "unknown"),
@@ -225,6 +239,7 @@ async def run_marketing_agent(brand_id: str, task: dict) -> dict[str, Any]:
         raise
 
     duration_ms = (time.perf_counter() - start) * 1000
+    logger.info("[MarketingAgent] Run completed successfully for brand_id=%s in %.1f ms", brand_id, duration_ms)
     async with AsyncSessionLocal() as session:
         await crud.log_execution(
             session, brand_id, "marketing_agent", task.get("task_type", "unknown"),

@@ -8,12 +8,15 @@ Write tools : update_product_price, set_inventory_level,
               create_restock_recommendation, create_discount_code
 """
 
+import logging
 import os
 import httpx
 from datetime import datetime, timedelta
 from typing import Optional
 from fastmcp import FastMCP
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -36,6 +39,7 @@ async def _get_brand_creds(brand_id: str) -> dict:
     try:
         raw = await r.get(f"fashionos:creds:{brand_id}")
         if not raw:
+            logger.error("No credentials found for brand_id=%s", brand_id)
             raise ValueError(
                 f"No credentials found for brand_id='{brand_id}'. "
                 "Ensure the brand exists and POST /api/v1/brands was called first."
@@ -128,6 +132,7 @@ async def list_products(brand_id: str, limit: int = 50, status: str = "active") 
     try:
         data = await _shopify_get(brand_id, "products.json", {"limit": limit, "status": status, "fields": "id,title,status,tags,image,variants"})
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return [{"error": str(e)}]
     results = []
     for p in data.get("products", []):
@@ -170,6 +175,7 @@ async def get_product_by_sku(brand_id: str, sku: str) -> Optional[dict]:
     try:
         data = await _shopify_get(brand_id, "products.json", {"fields": "id,title,variants,image", "limit": 250})
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     for product in data.get("products", []):
@@ -209,6 +215,7 @@ async def get_price_rules(brand_id: str, active_only: bool = True) -> list[dict]
             "fields": "id,title,value_type,value,starts_at,ends_at,created_at",
         })
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return [{"error": str(e)}]
 
     now = datetime.now(timezone.utc)  # ← aware datetime, matches Shopify's format
@@ -262,6 +269,7 @@ async def list_locations(brand_id: str) -> list[dict]:
     try:
         data = await _shopify_get(brand_id, "locations.json")
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return [{"error": str(e)}]
     return [
         {
@@ -298,6 +306,7 @@ async def get_recent_orders(brand_id: str, hours: int = 24, paid_only: bool = Tr
     try:
         data = await _shopify_get(brand_id, "orders.json", params)
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return [{"error": str(e)}]
 
     orders = []
@@ -343,6 +352,7 @@ async def get_returns(brand_id: str, days: int = 30) -> list[dict]:
             "fields":         "id,refunds,line_items",
         })
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return [{"error": str(e)}]
 
     returns = []
@@ -387,6 +397,7 @@ async def calculate_sales_velocity(brand_id: str, days: int = 14) -> list[dict]:
             "fields":           "line_items,created_at",
         })
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return [{"error": str(e)}]
 
     sku_data: dict[str, dict] = {}
@@ -449,6 +460,7 @@ async def update_product_price(
     try:
         result = await _shopify_put(brand_id, f"variants/{variant_id}.json", payload)
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     v = result.get("variant", {})
@@ -490,6 +502,7 @@ async def set_inventory_level(
             "available":         available,
         })
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
     return {
         "success":   True,
@@ -610,6 +623,7 @@ async def create_discount_code(
     try:
         result = await _shopify_post(brand_id, "price_rules.json", {"price_rule": price_rule})
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     rule_id = result.get("price_rule", {}).get("id")
@@ -654,6 +668,7 @@ async def get_abandoned_checkouts(brand_id: str, hours: int = 24) -> list[dict]:
             "status": "open",
         })
     except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
         return [{"error": str(e)}]
 
     checkouts = []

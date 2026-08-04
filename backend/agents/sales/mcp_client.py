@@ -7,9 +7,12 @@ Unlike Inventory, the Sales Agent gets a filtered, READ-ONLY subset — it
 calling update_product_price / set_inventory_level / create_restock_
 recommendation even though those tools exist on the shared server.
 """
+import logging
 import os
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
+
+logger = logging.getLogger(__name__)
 
 SHOPIFY_MCP_URL = os.getenv("SHOPIFY_MCP_URL", "http://localhost:8001/mcp")
 

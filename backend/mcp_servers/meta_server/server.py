@@ -19,12 +19,15 @@ between API versions more than Shopify's — worth checking the exact
 `metric=` list against current Meta docs if a read tool starts erroring.
 """
 
+import logging
 import os
 import httpx
 from datetime import datetime, timezone
 from typing import Optional
 from fastmcp import FastMCP
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -46,6 +49,7 @@ async def _get_brand_creds(brand_id: str) -> dict:
     try:
         raw = await r.get(f"fashionos:creds:{brand_id}")
         if not raw:
+            logger.error("No Meta credentials found for brand_id=%s", brand_id)
             raise ValueError(
                 f"No credentials found for brand_id='{brand_id}'. "
                 "Ensure the brand exists and has connected Meta via OAuth."
@@ -104,6 +108,7 @@ async def get_instagram_account_insights(brand_id: str, period: str = "day", day
     try:
         creds = await _get_brand_creds(brand_id)
     except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     ig_user_id = creds.get("instagram_page_id")
@@ -124,6 +129,7 @@ async def get_instagram_account_insights(brand_id: str, period: str = "day", day
             },
         )
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return {"error": f"Instagram insights request failed: {e.response.text}"}
 
     return {
@@ -166,6 +172,7 @@ async def list_recent_instagram_media(brand_id: str, limit: int = 10) -> list[di
             {"fields": "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count", "limit": limit},
         )
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return [{"error": f"Instagram media request failed: {e.response.text}"}]
 
     return [
@@ -199,6 +206,7 @@ async def get_instagram_media_insights(brand_id: str, media_id: str) -> dict:
     try:
         creds = await _get_brand_creds(brand_id)
     except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     token = creds.get("instagram_access_token")
@@ -208,6 +216,7 @@ async def get_instagram_media_insights(brand_id: str, media_id: str) -> dict:
     try:
         data = await _graph_get(f"{media_id}/insights", token, {"metric": "impressions,reach,saved,engagement"})
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return {"error": f"Media insights request failed: {e.response.text}"}
 
     return {m.get("name"): (m.get("values", [{}])[0] or {}).get("value") for m in data.get("data", [])}
@@ -233,6 +242,7 @@ async def publish_instagram_post(brand_id: str, image_url: str, caption: str) ->
     try:
         creds = await _get_brand_creds(brand_id)
     except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     ig_user_id = creds.get("instagram_page_id")
@@ -253,6 +263,7 @@ async def publish_instagram_post(brand_id: str, image_url: str, caption: str) ->
 
         permalink_data = await _graph_get(f"{media_id}", token, {"fields": "permalink"})
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return {"error": f"Instagram publish failed: {e.response.text}"}
 
     return {
@@ -281,6 +292,7 @@ async def get_ad_account_summary(brand_id: str, date_preset: str = "last_7d") ->
     try:
         creds = await _get_brand_creds(brand_id)
     except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     ad_account_id = creds.get("meta_ad_account_id")
@@ -294,6 +306,7 @@ async def get_ad_account_summary(brand_id: str, date_preset: str = "last_7d") ->
             {"fields": "spend,impressions,clicks,ctr,cpc,actions", "date_preset": date_preset},
         )
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return {"error": f"Ad account insights request failed: {e.response.text}"}
 
     rows = data.get("data", [])
@@ -343,6 +356,7 @@ async def list_ad_campaigns(brand_id: str, status_filter: Optional[str] = None) 
     try:
         data = await _graph_get(f"{ad_account_id}/campaigns", token, params)
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return [{"error": f"Campaign list request failed: {e.response.text}"}]
 
     return [
@@ -393,6 +407,7 @@ async def create_ad_campaign(
     try:
         creds = await _get_brand_creds(brand_id)
     except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     ad_account_id = creds.get("meta_ad_account_id")
@@ -410,6 +425,7 @@ async def create_ad_campaign(
     try:
         result = await _graph_post(f"{ad_account_id}/campaigns", token, payload)
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return {"error": f"Meta rejected the campaign: {e.response.text}"}
 
     return {
@@ -440,6 +456,7 @@ async def update_campaign_budget(brand_id: str, campaign_id: str, daily_budget: 
     try:
         creds = await _get_brand_creds(brand_id)
     except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     token = creds.get("meta_access_token")
@@ -449,6 +466,7 @@ async def update_campaign_budget(brand_id: str, campaign_id: str, daily_budget: 
     try:
         await _graph_post(campaign_id, token, {"daily_budget": int(round(daily_budget * 100))})
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return {"error": f"Budget update failed: {e.response.text}"}
 
     return {"success": True, "campaign_id": campaign_id, "new_daily_budget": daily_budget, "reason": reason}
@@ -490,6 +508,7 @@ async def _set_campaign_status(brand_id: str, campaign_id: str, status: str, rea
     try:
         creds = await _get_brand_creds(brand_id)
     except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
         return {"error": str(e)}
 
     token = creds.get("meta_access_token")
@@ -499,6 +518,7 @@ async def _set_campaign_status(brand_id: str, campaign_id: str, status: str, rea
     try:
         await _graph_post(campaign_id, token, {"status": status})
     except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error: %s", e.response.text)
         return {"error": f"Status update failed: {e.response.text}"}
 
     return {"success": True, "campaign_id": campaign_id, "status": status, "reason": reason}

@@ -9,6 +9,7 @@ Wire into your app with:
     from api.routers import inventory_agent
     app.include_router(inventory_agent.router)
 """
+import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
@@ -20,6 +21,8 @@ from api.auth import get_current_brand
 from db import crud_inventory as crud
 from db.models import Brand
 from db.session import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agents/inventory", tags=["inventory-agent"])
 
@@ -42,9 +45,16 @@ async def trigger_inventory_agent(
     req: RunInventoryAgentRequest,
     brand: Brand = Depends(get_current_brand),
 ):
+    logger.info("API trigger inventory agent for brand_id=%s, task_type=%s", brand.brand_id, req.task_type)
     task = req.model_dump()
     task["trigger"] = "manual"
-    return await run_inventory_agent(brand.brand_id, task)
+    try:
+        res = await run_inventory_agent(brand.brand_id, task)
+        logger.info("Completed API trigger inventory agent for brand_id=%s", brand.brand_id)
+        return res
+    except Exception:
+        logger.exception("Failed API trigger inventory agent for brand_id=%s", brand.brand_id)
+        raise
 
 
 @router.get("/alerts")
@@ -53,6 +63,7 @@ async def list_alerts(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing inventory alerts for brand_id=%s, resolved=%s", brand.brand_id, resolved)
     return await crud.list_alerts(session, brand.brand_id, resolved=resolved)
 
 
@@ -62,4 +73,6 @@ async def list_recommendations(
     brand: Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing inventory recommendations for brand_id=%s, status=%s", brand.brand_id, status)
     return await crud.list_recommendations(session, brand.brand_id, status=status)
+

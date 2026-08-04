@@ -6,9 +6,12 @@ namespace ("convos", brand_id)) plus replaying a thread's human/AI messages
 from the LangGraph checkpoint for the chat history view.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from deep_agents.runtime import get_store, get_checkpointer, get_cached_agent
+
+logger = logging.getLogger(__name__)
 
 _CONVOS_NS = "convos"
 
@@ -74,15 +77,15 @@ async def delete_conversation(brand_id: str, thread_id: str) -> None:
     try:
         await store.adelete(namespace, thread_id)
         deleted = True
-        print(f"[Convos] hard-deleted {thread_id} for brand={brand_id}")
+        logger.info("Hard-deleted thread=%s for brand=%s", thread_id, brand_id)
     except Exception as exc:
-        print(f"[Convos] adelete unavailable ({exc}), using soft-delete marker")
+        logger.warning("adelete unavailable (%s), using soft-delete marker", exc)
 
     if not deleted:
         try:
             await store.aput(namespace, thread_id, {"_deleted": True})
         except Exception as exc2:
-            print(f"[Convos] soft-delete also failed: {exc2}")
+            logger.error("Soft-delete also failed for thread=%s: %s", thread_id, exc2)
             raise
 
 
@@ -145,22 +148,22 @@ async def get_thread_messages(brand_id: str, brand_name: str, thread_id: str) ->
             raw_messages = (checkpoint.get("channel_values") or {}).get("messages", [])
             if raw_messages:
                 result = await _extract_messages(raw_messages)
-                print(f"[Convos] checkpoint returned {len(result)} messages for {thread_id}")
+                logger.info("Checkpoint returned %d messages for thread=%s", len(result), thread_id)
                 return result
-        print(f"[Convos] no checkpoint messages for {thread_id}, trying full agent state")
+        logger.info("No checkpoint messages for thread=%s, trying full agent state", thread_id)
     except Exception as exc:
-        print(f"[Convos] checkpoint read failed ({exc}), falling back to agent state")
+        logger.warning("Checkpoint read failed (%s), falling back to agent state", exc)
 
     try:
         agent        = await get_cached_agent(brand_id, brand_name)
         state        = await agent.aget_state(config)
         raw_messages = (state.values or {}).get("messages", []) if state else []
         if not raw_messages:
-            print(f"[Convos] aget_state returned 0 messages for {thread_id}")
+            logger.info("aget_state returned 0 messages for thread=%s", thread_id)
             return []
         result = await _extract_messages(raw_messages)
-        print(f"[Convos] aget_state fallback returned {len(result)} messages for {thread_id}")
+        logger.info("aget_state fallback returned %d messages for thread=%s", len(result), thread_id)
         return result
     except Exception as exc:
-        print(f"[Convos] agent state fallback failed: {exc}")
+        logger.error("Agent state fallback failed for thread=%s: %s", thread_id, exc)
         return []

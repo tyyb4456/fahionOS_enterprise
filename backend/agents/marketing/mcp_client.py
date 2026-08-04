@@ -5,9 +5,12 @@ writes itself) and meta-mcp (Instagram + Meta Ads — the Marketing Agent's
 actual execution surface) for the ReAct loop. Same client pattern as
 agents/inventory/mcp_client.py and agents/sales/mcp_client.py.
 """
+import logging
 import os
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
+
+logger = logging.getLogger(__name__)
 
 SHOPIFY_MCP_URL = os.getenv("SHOPIFY_MCP_URL", "http://localhost:8001/mcp")
 META_MCP_URL = os.getenv("META_MCP_URL", "http://localhost:8002/mcp")

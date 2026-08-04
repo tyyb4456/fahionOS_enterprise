@@ -5,6 +5,7 @@ Async SQLAlchemy engine + session factory.
 (unchanged — reproduced here only so new modules import cleanly)
 """
 
+import logging
 import os
 from collections.abc import AsyncGenerator
 
@@ -13,6 +14,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -42,6 +45,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
             yield session
             await session.commit()
         except Exception:
+            logger.error("Database session error — rolling back", exc_info=True)
             await session.rollback()
             raise
         finally:

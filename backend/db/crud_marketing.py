@@ -18,6 +18,7 @@ Three kinds of tables live here:
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -30,6 +31,8 @@ from db.models import (
     Product, ProductVariant, SalesInsight, SalesReport, ScheduledContent,
     SeasonalEvent,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -45,6 +48,7 @@ async def get_business_context(session: AsyncSession, brand_id: str, max_product
     the upcoming marketing calendar. Deeper digging happens via tools, same
     as Inventory/Sales.
     """
+    logger.info("Building marketing context for brand=%s", brand_id)
     products = await _promotable_products(session, brand_id, limit=max_products)
     sales_insights = await _recent_sales_insights(session, brand_id, limit=8)
     latest_report = await _latest_sales_report(session, brand_id)
@@ -240,6 +244,7 @@ async def create_scheduled_content(
     session: AsyncSession, brand_id: str, platform: str, content_type: str,
     content: dict, scheduled_for: datetime, campaign_id: Optional[str] = None,
 ) -> dict:
+    logger.info("Creating scheduled content for brand=%s platform=%s", brand_id, platform)
     row = ScheduledContent(
         brand_id=brand_id,
         campaign_id=campaign_id,
@@ -270,6 +275,7 @@ async def record_content_performance(
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def save_campaigns(session: AsyncSession, brand_id: str, campaigns: list[dict]) -> list[str]:
+    logger.info("Saving %d campaigns for brand=%s", len(campaigns), brand_id)
     ids = []
     for c in campaigns:
         row = MarketingCampaign(
@@ -298,6 +304,7 @@ async def save_content_plan(session: AsyncSession, brand_id: str, topics: list[s
 
 
 async def save_marketing_insights(session: AsyncSession, brand_id: str, insights: list[dict]) -> None:
+    logger.info("Saving %d marketing insights for brand=%s", len(insights), brand_id)
     for i in insights:
         session.add(MarketingInsight(
             brand_id=brand_id, insight=i.get("insight", ""),
@@ -307,6 +314,7 @@ async def save_marketing_insights(session: AsyncSession, brand_id: str, insights
 
 
 async def save_audience_recommendations(session: AsyncSession, brand_id: str, recommendations: list[dict]) -> None:
+    logger.info("Saving %d audience recommendations for brand=%s", len(recommendations), brand_id)
     for r in recommendations:
         segment = r.get("segment", "")
         if not segment:

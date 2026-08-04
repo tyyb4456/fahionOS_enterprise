@@ -9,6 +9,7 @@ POST /api/v1/brands/provision  → manual brand creation (X-Admin-Secret)
 GET  /api/v1/brands/all        → list all brands (X-Admin-Secret)
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -22,6 +23,8 @@ from api.auth import get_current_brand, require_admin
 from db.credentials import BrandCredentials, cache_brand_credentials, decrypt_value, encrypt_value
 from db.models import Brand
 from db.session import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/brands", tags=["brands"])
 
@@ -97,9 +100,11 @@ async def provision_brand(
     _:       None = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Provisioning brand brand_id=%s, name=%s", req.brand_id, req.brand_name)
     if (await session.execute(
         select(Brand).where(Brand.brand_id == req.brand_id)
     )).scalar_one_or_none():
+        logger.error("Provision brand failed: brand_id=%s already exists", req.brand_id)
         raise HTTPException(400, f"brand_id='{req.brand_id}' already exists.")
 
     brand = Brand(
@@ -113,6 +118,7 @@ async def provision_brand(
     )
     session.add(brand)
     await session.flush()
+    logger.info("Successfully provisioned brand brand_id=%s", req.brand_id)
     return {"brand_id": req.brand_id, "message": "Brand provisioned. Connect Shopify and Meta via OAuth."}
 
 
@@ -121,6 +127,7 @@ async def list_all_brands(
     _:       None = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info("Listing all brands (admin request)")
     brands = (await session.execute(select(Brand).order_by(Brand.created_at))).scalars().all()
     return [_to_response(b) for b in brands]
 
@@ -129,6 +136,7 @@ async def list_all_brands(
 
 @router.get("/me", response_model=BrandResponse)
 async def get_my_brand(brand: Brand = Depends(get_current_brand)):
+    logger.info("Fetched brand info for brand_id=%s", brand.brand_id)
     return _to_response(brand)
 
 
@@ -139,6 +147,7 @@ async def update_my_brand(
     session: AsyncSession = Depends(get_session),
 ):
     """Update brand name and notification contacts. Credentials come via OAuth."""
+    logger.info("Updating brand info for brand_id=%s", brand.brand_id)
     if req.brand_name is not None:
         brand.brand_name = req.brand_name
     if req.brand_owner_whatsapp is not None:
@@ -149,6 +158,7 @@ async def update_my_brand(
     brand.updated_at = datetime.now(timezone.utc)
     await session.flush()
     await cache_brand_credentials(brand.brand_id, _build_creds(brand))
+    logger.info("Successfully updated brand info for brand_id=%s", brand.brand_id)
     return _to_response(brand)
 
 
@@ -158,12 +168,14 @@ async def disconnect_shopify(
     session: AsyncSession = Depends(get_session),
 ):
     """Disconnect Shopify — clears token from DB and Redis."""
+    logger.info("Disconnecting Shopify for brand_id=%s", brand.brand_id)
     brand.shopify_shop_name          = None
     brand.shopify_access_token_enc   = None
     brand.shopify_webhook_secret_enc = None
     brand.updated_at                 = datetime.now(timezone.utc)
     await session.flush()
     await cache_brand_credentials(brand.brand_id, _build_creds(brand))
+    logger.info("Shopify disconnected for brand_id=%s", brand.brand_id)
 
 
 @router.delete("/me/meta", status_code=204)
@@ -172,6 +184,7 @@ async def disconnect_meta(
     session: AsyncSession = Depends(get_session),
 ):
     """Disconnect Meta — clears token from DB and Redis."""
+    logger.info("Disconnecting Meta for brand_id=%s", brand.brand_id)
     brand.meta_access_token_enc      = None
     brand.meta_ad_account_id         = None
     brand.instagram_access_token_enc = None
@@ -179,3 +192,4 @@ async def disconnect_meta(
     brand.updated_at                 = datetime.now(timezone.utc)
     await session.flush()
     await cache_brand_credentials(brand.brand_id, _build_creds(brand))
+    logger.info("Meta disconnected for brand_id=%s", brand.brand_id)

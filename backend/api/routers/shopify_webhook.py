@@ -23,6 +23,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
@@ -33,12 +34,15 @@ from db.credentials import decrypt_value
 from db.models import Brand, Customer, OrderLineItem, Product, ProductVariant, Return, SalesOrder
 from db.session import AsyncSessionLocal
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/webhooks/shopify", tags=["shopify-webhooks"])
 
 
 async def _verify_and_load(request: Request, brand_id: str, session: AsyncSession) -> tuple[Brand, dict]:
     brand = (await session.execute(select(Brand).where(Brand.brand_id == brand_id))).scalar_one_or_none()
     if not brand or not brand.shopify_webhook_secret_enc:
+        logger.error("Shopify webhook verification failed: brand_id=%s unknown or not connected", brand_id)
         raise HTTPException(404, "Unknown brand or Shopify not connected.")
 
     secret = decrypt_value(brand.shopify_webhook_secret_enc)
@@ -47,6 +51,7 @@ async def _verify_and_load(request: Request, brand_id: str, session: AsyncSessio
     expected = base64.b64encode(digest).decode()
     received = request.headers.get("X-Shopify-Hmac-Sha256", "")
     if not hmac.compare_digest(expected, received):
+        logger.error("Shopify webhook verification failed: signature mismatch for brand_id=%s", brand_id)
         raise HTTPException(401, "Invalid webhook signature.")
 
     return brand, json.loads(body)
@@ -54,6 +59,7 @@ async def _verify_and_load(request: Request, brand_id: str, session: AsyncSessio
 
 @router.post("/{brand_id}/{topic:path}")
 async def shopify_webhook(brand_id: str, topic: str, request: Request):
+    logger.info("Received Shopify webhook for brand_id=%s, topic=%s", brand_id, topic)
     async with AsyncSessionLocal() as session:
         _brand, payload = await _verify_and_load(request, brand_id, session)
 
@@ -71,6 +77,7 @@ async def shopify_webhook(brand_id: str, topic: str, request: Request):
 
         await session.commit()
 
+    logger.info("Processed Shopify webhook for brand_id=%s, topic=%s, handled=%s", brand_id, topic, handled)
     return {"received": True, "topic": topic, "handled": handled}
 
 

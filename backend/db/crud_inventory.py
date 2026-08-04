@@ -18,6 +18,7 @@ Shopify stock via set_inventory_level.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
@@ -30,6 +31,8 @@ from db.models import (
     OrderLineItem, Product, ProductVariant, PurchaseOrder,
     ReorderRecommendation, SalesOrder, SeasonalEvent, Supplier, Warehouse,
 )
+
+logger = logging.getLogger(__name__)
 
 LOW_STOCK_THRESHOLD_DEFAULT = 25
 
@@ -50,6 +53,7 @@ async def get_business_context(
     this the agent can pull with a tool call instead of us dumping the whole
     catalog into the prompt every run.
     """
+    logger.info("Building inventory context for brand=%s", brand_id)
     variants_stmt = (
         select(ProductVariant, Product)
         .join(Product, Product.id == ProductVariant.product_id)
@@ -138,6 +142,8 @@ async def get_business_context(
         for e in (await session.execute(seasonal_stmt)).scalars().all()
     ]
 
+    logger.info("Inventory context built for brand=%s: %d products, %d sales, %d POs, %d suppliers",
+                brand_id, len(products), len(sales_summary), len(open_pos), len(suppliers))
     return {
         "products": products,
         "sales_summary": sales_summary,
@@ -164,6 +170,7 @@ async def get_sku_sales_history(
     )
     variant = (await session.execute(variant_stmt)).scalar_one_or_none()
     if variant is None:
+        logger.info("SKU %s not found for brand=%s", sku, brand_id)
         return None, []
 
     since = datetime.now(timezone.utc) - timedelta(days=days)
@@ -250,6 +257,8 @@ async def create_purchase_order(
     session: AsyncSession, brand_id: str, sku: str, supplier_id: str,
     quantity: int, expected_delivery: date,
 ) -> dict:
+    logger.info("Creating purchase order for brand=%s sku=%s qty=%d supplier=%s",
+                brand_id, sku, quantity, supplier_id)
     po = PurchaseOrder(
         brand_id=brand_id, supplier_id=uuid.UUID(supplier_id), sku=sku,
         ordered_quantity=quantity, expected_delivery=expected_delivery, status="pending",
@@ -267,6 +276,7 @@ async def create_purchase_order(
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def save_forecasts(session: AsyncSession, brand_id: str, forecasts: list[dict]) -> None:
+    logger.info("Saving %d forecasts for brand=%s", len(forecasts), brand_id)
     today = date.today()
     for f in forecasts:
         session.add(InventoryForecast(
@@ -283,6 +293,7 @@ async def save_forecasts(session: AsyncSession, brand_id: str, forecasts: list[d
 
 
 async def save_recommendations(session: AsyncSession, brand_id: str, recommendations: list[dict]) -> None:
+    logger.info("Saving %d recommendations for brand=%s", len(recommendations), brand_id)
     for r in recommendations:
         po_id = r.get("purchase_order_id")
         session.add(ReorderRecommendation(
@@ -300,6 +311,7 @@ async def save_recommendations(session: AsyncSession, brand_id: str, recommendat
 
 
 async def save_alerts(session: AsyncSession, brand_id: str, alerts: list[dict]) -> None:
+    logger.info("Saving %d alerts for brand=%s", len(alerts), brand_id)
     for a in alerts:
         session.add(InventoryAlert(
             brand_id=brand_id,

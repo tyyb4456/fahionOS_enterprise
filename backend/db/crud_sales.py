@@ -11,6 +11,7 @@ Two kinds of tables, same split as db/crud_inventory.py:
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -22,6 +23,8 @@ from db.models import (
     Customer, CustomerSegment, OrderLineItem, Return,
     SalesAnomaly, SalesForecast, SalesInsight, SalesOrder, SalesReport,
 )
+
+logger = logging.getLogger(__name__)
 
 TIME_RANGE_DAYS = {
     "today": 1,
@@ -57,6 +60,7 @@ async def get_business_context(session: AsyncSession, brand_id: str, time_range:
     discount usage, and a daily revenue series for trend/anomaly context.
     Bounded in size on purpose — deeper digging happens via tools.
     """
+    logger.info("Building sales context for brand=%s time_range=%s", brand_id, time_range)
     start, end = _window_for(time_range)
     period_length = end - start
     prev_start, prev_end = start - period_length, start
@@ -348,11 +352,13 @@ async def get_revenue_kpis(session: AsyncSession, brand_id: str, time_range: str
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def save_sales_report(session: AsyncSession, brand_id: str, period: str, summary: str, kpis: dict) -> None:
+    logger.info("Saving sales report for brand=%s period=%s", brand_id, period)
     session.add(SalesReport(brand_id=brand_id, period=period, summary=summary, kpis=kpis))
     await session.flush()
 
 
 async def save_sales_insights(session: AsyncSession, brand_id: str, insights: list[dict]) -> None:
+    logger.info("Saving %d sales insights for brand=%s", len(insights), brand_id)
     for i in insights:
         session.add(SalesInsight(
             brand_id=brand_id,
@@ -365,6 +371,7 @@ async def save_sales_insights(session: AsyncSession, brand_id: str, insights: li
 
 
 async def save_sales_forecasts(session: AsyncSession, brand_id: str, forecasts: list[dict]) -> None:
+    logger.info("Saving %d sales forecasts for brand=%s", len(forecasts), brand_id)
     for f in forecasts:
         forecast_date = f.get("forecast_date")
         if isinstance(forecast_date, str):
@@ -385,6 +392,7 @@ async def save_sales_forecasts(session: AsyncSession, brand_id: str, forecasts: 
 
 
 async def save_sales_anomalies(session: AsyncSession, brand_id: str, anomalies: list[dict]) -> None:
+    logger.info("Saving %d sales anomalies for brand=%s", len(anomalies), brand_id)
     for a in anomalies:
         session.add(SalesAnomaly(
             brand_id=brand_id, metric=a.get("metric", ""),
@@ -395,6 +403,7 @@ async def save_sales_anomalies(session: AsyncSession, brand_id: str, anomalies: 
 
 
 async def save_customer_segments(session: AsyncSession, brand_id: str, segments: list[dict]) -> None:
+    logger.info("Saving %d customer segments for brand=%s", len(segments), brand_id)
     for s in segments:
         existing = (await session.execute(
             select(CustomerSegment).where(

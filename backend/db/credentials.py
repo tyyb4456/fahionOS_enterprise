@@ -12,10 +12,13 @@ Generate encryption key:
 """
 
 import json
+import logging
 import os
 from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
+
+logger = logging.getLogger(__name__)
 
 ENCRYPTION_KEY = os.getenv("FASHIONOS_ENCRYPTION_KEY", "")
 REDIS_URL      = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -27,6 +30,7 @@ def _get_cipher() -> Fernet:
     global _cipher
     if _cipher is None:
         if not ENCRYPTION_KEY:
+            logger.error("FASHIONOS_ENCRYPTION_KEY is not set in environment!")
             raise RuntimeError(
                 "FASHIONOS_ENCRYPTION_KEY not set. "
                 "Run: python -c \"from cryptography.fernet import Fernet; "
@@ -50,6 +54,7 @@ def decrypt_value(encrypted: str) -> str:
     try:
         return _get_cipher().decrypt(encrypted.encode()).decode()
     except (InvalidToken, Exception):
+        logger.error("Failed to decrypt encrypted credential value")
         return ""
 
 

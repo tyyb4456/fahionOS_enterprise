@@ -23,9 +23,12 @@ Architecture summary:
 """
 
 import asyncio
+import logging
 
 from deep_agent.runtime import get_cached_agent
 from deep_agent.streaming import chat, stream_chat, PERSISTABLE_TOOLS
+
+logger = logging.getLogger(__name__)
 from deep_agent.conversations import (
     save_conversation_meta,
     list_conversations,

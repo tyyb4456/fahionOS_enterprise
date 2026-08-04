@@ -16,6 +16,7 @@ ChatHuggingFace model experiment are gone — the latter was dead code anyway
 """
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from agents.inventory.graph import inventory_agent
 from agents.sales.graph import sales_agent
 from agents.marketing.graph import marketing_agent
 
+logger = logging.getLogger(__name__)
 load_dotenv()
 
 REDIS_URL  = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -47,10 +49,14 @@ _store: AsyncRedisStore | None = None
 async def get_store() -> AsyncRedisStore:
     global _store
     if _store is None:
-        candidate = AsyncRedisStore(redis_url=REDIS_URL)
-        await candidate.setup()     # if this throws, _store stays None — next request retries clean
-        _store = candidate
-        print("[Store] ✓ AsyncRedisStore ready (index created)")
+        try:
+            candidate = AsyncRedisStore(redis_url=REDIS_URL)
+            await candidate.setup()     # if this throws, _store stays None — next request retries clean
+            _store = candidate
+            logger.info("[Store] AsyncRedisStore ready (index created)")
+        except Exception:
+            logger.exception("[Store] Failed to initialize AsyncRedisStore")
+            raise
     return _store
 
 
@@ -68,7 +74,7 @@ async def get_checkpointer() -> AsyncRedisSaver:
         # schemas (InventoryAnalysis, TrendAnalysis, etc.) flowing directly
         # into message history.
         await _checkpointer.asetup()
-        print("[Checkpointer] ✓ AsyncRedisSaver ready")
+        logger.info("AsyncRedisSaver checkpointer ready")
     return _checkpointer
 
 
@@ -113,5 +119,5 @@ async def get_cached_agent(brand_id: str, brand_name: str):
     if brand_id not in _agent_cache:
         agent = await build_supervisor(brand_id, brand_name)
         _agent_cache[brand_id] = agent
-        print(f"[Supervisor] ✓ Built + cached agent for brand={brand_id}")
+        logger.info("Built and cached agent for brand=%s", brand_id)
     return _agent_cache[brand_id]

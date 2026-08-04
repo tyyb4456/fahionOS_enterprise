@@ -15,6 +15,7 @@ Security: state = CSRF token stored in Redis (10 min TTL) → links callback to 
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 from urllib.parse import urlencode
@@ -34,6 +35,8 @@ from db.models import Brand
 from db.session import get_session
 
 import redis.asyncio as aioredis
+
+logger = logging.getLogger(__name__)
 
 router   = APIRouter(prefix="/api/v1/oauth", tags=["oauth"])
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -116,7 +119,9 @@ async def shopify_oauth_start(
     Returns Shopify OAuth URL. Frontend redirects user to this URL.
     shop: e.g. "mybrand" (not "mybrand.myshopify.com")
     """
+    logger.info("Initiating Shopify OAuth flow for brand_id=%s, shop=%s", brand.brand_id, shop)
     if not SHOPIFY_CLIENT_ID:
+        logger.error("Shopify OAuth failed: SHOPIFY_CLIENT_ID not configured")
         raise HTTPException(500, "SHOPIFY_CLIENT_ID not configured.")
 
     shop_domain = shop.replace(".myshopify.com", "").strip()
@@ -151,6 +156,8 @@ async def shopify_oauth_callback(
     Exchanges code for token, stores it, registers webhooks.
     Then redirects user back to dashboard.
     """
+    logger.info("Received Shopify OAuth callback for shop=%s", shop)
+
     # ── 1. Verify HMAC (Shopify signs the callback) ────────────────────────────
     # Shopify signs ALL query params (except 'hmac'), sorted alphabetically.
     # Hardcoding only code/shop/state breaks when Shopify adds extra params like 'host'.
@@ -168,17 +175,20 @@ async def shopify_oauth_callback(
             hashlib.sha256,
         ).hexdigest()
         if not hmac.compare_digest(computed, hmac_param):
+            logger.error("Shopify OAuth callback HMAC signature verification failed")
             raise HTTPException(400, "Invalid HMAC signature.")
 
     # ── 2. Verify state → get brand_id ────────────────────────────────────────
     brand_id = await _get_state(state)
     if not brand_id:
+        logger.error("Shopify OAuth callback state verification failed for state=%s", state)
         raise HTTPException(400, "Invalid or expired state. Please try connecting again.")
 
     brand = (await session.execute(
         select(Brand).where(Brand.brand_id == brand_id)
     )).scalar_one_or_none()
     if not brand:
+        logger.error("Shopify OAuth callback failed: Brand brand_id=%s not found", brand_id)
         raise HTTPException(404, "Brand not found.")
 
     shop_domain = shop.replace(".myshopify.com", "")
@@ -194,6 +204,7 @@ async def shopify_oauth_callback(
             },
         )
         if not r.is_success:
+            logger.error("Shopify OAuth token exchange failed for shop=%s: %s", shop_domain, r.text)
             raise HTTPException(502, f"Shopify token exchange failed: {r.text}")
         data = r.json()
 
@@ -240,7 +251,7 @@ async def shopify_oauth_callback(
                 },
             )
 
-    print(f"[OAuth] ✓ Shopify connected for brand={brand_id} shop={shop_domain}, {len(topics)} webhooks registered.")
+    logger.info("Successfully connected Shopify for brand_id=%s, shop=%s", brand_id, shop_domain)
 
     return RedirectResponse(url=f"{FRONTEND_URL}/settings?shopify=connected")
 
@@ -252,7 +263,9 @@ async def shopify_oauth_callback(
 @router.get("/meta/start")
 async def meta_oauth_start(brand: Brand = Depends(get_current_brand)):
     """Returns Meta (Facebook) OAuth URL. Frontend redirects user to this URL."""
+    logger.info("Initiating Meta OAuth flow for brand_id=%s", brand.brand_id)
     if not META_CLIENT_ID:
+        logger.error("Meta OAuth failed: META_CLIENT_ID not configured")
         raise HTTPException(500, "META_CLIENT_ID not configured.")
 
     state = secrets.token_hex(16)
@@ -282,25 +295,30 @@ async def meta_oauth_callback(
     Exchanges code for long-lived token, auto-fetches ad account + IG page.
     Meta sends error_code + error_message (instead of code + state) on failure.
     """
+    logger.info("Received Meta OAuth callback")
     # ── 0. Handle Meta OAuth errors (e.g. rejected scope, user cancelled) ─────
     if error_code:
+        logger.error("Meta OAuth error response received: error_code=%s, error_message=%s", error_code, error_message)
         raise HTTPException(
             400,
             f"Meta OAuth failed (error {error_code}): {error_message or 'unknown error'}. "
             "Check your Meta App permissions in the developer dashboard."
         )
     if not code or not state:
+        logger.error("Meta OAuth callback failed: missing code or state")
         raise HTTPException(400, "Missing code or state — invalid callback.")
 
     # ── 1. Verify state ────────────────────────────────────────────────────────
     brand_id = await _get_state(state)
     if not brand_id:
+        logger.error("Meta OAuth callback state verification failed for state=%s", state)
         raise HTTPException(400, "Invalid or expired state. Please try connecting again.")
 
     brand = (await session.execute(
         select(Brand).where(Brand.brand_id == brand_id)
     )).scalar_one_or_none()
     if not brand:
+        logger.error("Meta OAuth callback failed: Brand brand_id=%s not found", brand_id)
         raise HTTPException(404, "Brand not found.")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -313,6 +331,7 @@ async def meta_oauth_callback(
             "code":          code,
         })
         if not r.is_success:
+            logger.error("Meta short-lived token exchange failed for brand_id=%s: %s", brand_id, r.text)
             raise HTTPException(502, f"Meta token exchange failed: {r.text}")
         short_token = r.json().get("access_token")
 
@@ -369,9 +388,6 @@ async def meta_oauth_callback(
     await session.flush()
     await _sync_creds(brand)
 
-    print(
-        f"[OAuth] ✓ Meta connected for brand={brand_id} "
-        f"ad_account={ad_account_id} ig_page={instagram_page_id}"
-    )
+    logger.info("Successfully connected Meta for brand_id=%s, ad_account_id=%s, ig_page_id=%s", brand_id, ad_account_id, instagram_page_id)
 
-    return RedirectResponse(url=f"{FRONTEND_URL}/settings?meta=connected")
+    return RedirectResponse(url=f"{FRONTEND_URL}/settings?meta=connected")

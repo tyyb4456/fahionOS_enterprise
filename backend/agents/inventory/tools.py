@@ -12,6 +12,7 @@ persist_node, which only ever wrote the AI's own audit-trail records.
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 
 from langchain_core.tools import StructuredTool
@@ -24,6 +25,8 @@ from notifications.dispatch import send_email, send_whatsapp
 
 from . import memory as rag
 from .forecasting import forecast_sku_demand as _forecast
+
+logger = logging.getLogger(__name__)
 
 
 def build_internal_tools(brand_id: str) -> list[StructuredTool]:
@@ -48,13 +51,16 @@ class _ForecastArgs(BaseModel):
 
 def _make_forecast_tool(brand_id: str) -> StructuredTool:
     async def _run(sku: str, forecast_days: int = 30) -> dict:
+        logger.info("[InventoryTool:forecast_sku_demand] Executing for brand_id=%s, sku=%s, days=%d", brand_id, sku, forecast_days)
         async with AsyncSessionLocal() as session:
             current_stock, history = await crud.get_sku_sales_history(session, brand_id, sku)
         if current_stock is None:
+            logger.error("[InventoryTool:forecast_sku_demand] SKU '%s' not found for brand_id=%s", sku, brand_id)
             return {"error": f"SKU '{sku}' not found in synced product data."}
         result = _forecast(current_stock, history, forecast_days=forecast_days)
         result["sku"] = sku
         result["current_stock"] = current_stock
+        logger.info("[InventoryTool:forecast_sku_demand] Finished for brand_id=%s, sku=%s", brand_id, sku)
         return result
 
     return StructuredTool.from_function(

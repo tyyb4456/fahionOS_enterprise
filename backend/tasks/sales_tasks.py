@@ -5,6 +5,7 @@ Sales Agent — scheduled runs.
 celery_app.py fires daily; fans out one task per active brand.
 """
 import asyncio
+import logging
 
 from sqlalchemy import select
 
@@ -13,20 +14,30 @@ from db.session import AsyncSessionLocal
 from pipeline import run_sales_agent_sync
 from tasks.celery_app import celery_app
 
+logger = logging.getLogger(__name__)
+
 
 @celery_app.task(name="tasks.sales_tasks.run_sales_agent_for_brand")
 def run_sales_agent_for_brand(brand_id: str, task_type: str = "analyze_sales", time_range: str = "last_7_days") -> dict:
+    logger.info("Celery task run_sales_agent_for_brand started for brand_id=%s, task_type=%s", brand_id, task_type)
     task = {
         "task_type": task_type,
         "time_range": time_range,
         "priority": "normal",
         "trigger": "daily_scheduler",
     }
-    return run_sales_agent_sync(brand_id, task)
+    try:
+        res = run_sales_agent_sync(brand_id, task)
+        logger.info("Celery task run_sales_agent_for_brand completed for brand_id=%s", brand_id)
+        return res
+    except Exception:
+        logger.exception("Celery task run_sales_agent_for_brand failed for brand_id=%s", brand_id)
+        raise
 
 
 @celery_app.task(name="tasks.sales_tasks.run_sales_agent_for_all_brands")
 def run_sales_agent_for_all_brands() -> int:
+    logger.info("Celery task run_sales_agent_for_all_brands triggered")
     async def _active_brand_ids() -> list[str]:
         async with AsyncSessionLocal() as session:
             rows = (await session.execute(
@@ -35,6 +46,7 @@ def run_sales_agent_for_all_brands() -> int:
             return list(rows)
 
     brand_ids = asyncio.run(_active_brand_ids())
+    logger.info("Fanning out sales task for %d active brands", len(brand_ids))
     for brand_id in brand_ids:
         run_sales_agent_for_brand.delay(brand_id)
 

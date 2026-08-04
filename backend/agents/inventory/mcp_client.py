@@ -10,9 +10,12 @@ Inventory's; scoping down here is the same reasoning as Sales' own
 _ALLOWED_TOOL_NAMES filter, just with a couple of write tools included since
 Inventory is now allowed to act, not only read.
 """
+import logging
 import os
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
+
+logger = logging.getLogger(__name__)
 
 SHOPIFY_MCP_URL = os.getenv("SHOPIFY_MCP_URL", "http://localhost:8001/mcp")
 

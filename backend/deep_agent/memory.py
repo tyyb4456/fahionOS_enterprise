@@ -7,7 +7,11 @@ brand_id). Seeded once, on first contact; the agent edits it directly
 afterward via read_file/edit_file as it learns things about the brand.
 """
 
+import logging
+
 from langgraph.store.redis.aio import AsyncRedisStore
+
+logger = logging.getLogger(__name__)
 
 
 def seed_agents_md(brand_id: str, brand_name: str) -> str:
@@ -53,6 +57,6 @@ async def ensure_brand_seeded(brand_id: str, brand_name: str, store: AsyncRedisS
     if existing is None:
         from deepagents.backends.utils import create_file_data
         await store.aput(namespace, key, create_file_data(seed_agents_md(brand_id, brand_name)))
-        print(f"[Memory] ✓ Seeded AGENTS.md for brand={brand_id}")
+        logger.info("Seeded AGENTS.md for brand=%s", brand_id)
     else:
-        print(f"[Memory] ✓ AGENTS.md already exists for brand={brand_id}, skipping seed")
+        logger.info("AGENTS.md already exists for brand=%s, skipping seed", brand_id)

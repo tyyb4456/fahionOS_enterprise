@@ -15,6 +15,7 @@ supplier tool.
 """
 from __future__ import annotations
 
+import logging
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -22,6 +23,8 @@ from sqlalchemy import select
 from db.models import Brand
 from db.session import AsyncSessionLocal
 from notifications.dispatch import send_email, send_whatsapp
+
+logger = logging.getLogger(__name__)
 
 
 class _NotifyArgs(BaseModel):
@@ -32,11 +35,13 @@ class _NotifyArgs(BaseModel):
 
 def make_notify_brand_owner_tool(brand_id: str, agent_name: str) -> StructuredTool:
     async def _run(subject: str, message: str, channel: str = "both") -> dict:
+        logger.info("[NotifyTool:%s] Sending notification for brand_id=%s, subject=%s, channel=%s", agent_name, brand_id, subject, channel)
         async with AsyncSessionLocal() as session:
             brand = (await session.execute(
                 select(Brand).where(Brand.brand_id == brand_id)
             )).scalar_one_or_none()
         if not brand:
+            logger.error("[NotifyTool:%s] Failed: Brand brand_id=%s not found", agent_name, brand_id)
             return {"sent": False, "error": "Brand not found."}
 
         results = []
@@ -46,8 +51,11 @@ def make_notify_brand_owner_tool(brand_id: str, agent_name: str) -> StructuredTo
             results.append(await send_email(brand.brand_owner_email, f"[FashionOS – {agent_name}] {subject}", message))
 
         if not results:
+            logger.error("[NotifyTool:%s] Failed: No contact info on file for brand_id=%s", agent_name, brand_id)
             return {"sent": False, "error": "No contact info on file for this brand (brand_owner_whatsapp / brand_owner_email)."}
-        return {"sent": any(r.get("sent") for r in results), "results": results}
+        sent_ok = any(r.get("sent") for r in results)
+        logger.info("[NotifyTool:%s] Notification completed for brand_id=%s, sent_ok=%s", agent_name, brand_id, sent_ok)
+        return {"sent": sent_ok, "results": results}
 
     return StructuredTool.from_function(
         name="notify_brand_owner",
