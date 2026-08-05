@@ -232,9 +232,9 @@ export default function LandingNoir() {
           {isSignedIn ? (
             <button
               className="py-2.5 px-7 rounded-[6px] text-[0.7rem] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-200 border border-[#d4d4d8]/60 text-[#d4d4d8] bg-transparent hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] max-[640px]:hidden"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/chat')}
             >
-              Dashboard
+              Chat
             </button>
           ) : (
             <SignInButton mode="modal">
@@ -276,9 +276,9 @@ export default function LandingNoir() {
           {isSignedIn ? (
             <button
               className="mt-4 py-3 rounded-[6px] text-[0.7rem] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-200 border border-[#d4d4d8]/60 text-[#d4d4d8] bg-transparent hover:bg-[#d4d4d8]/10"
-              onClick={() => { navigate('/dashboard'); setMobileNavOpen(false) }}
+              onClick={() => { navigate('/chat'); setMobileNavOpen(false) }}
             >
-              Dashboard
+              Chat
             </button>
           ) : (
             <SignInButton mode="modal">
@@ -306,9 +306,9 @@ export default function LandingNoir() {
             {isSignedIn ? (
               <button
                 className="py-3.75 px-10 border border-[#d4d4d8]/55 rounded-md text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.22em] uppercase cursor-pointer transition-all duration-200 flex items-center gap-2.5 w-full sm:w-auto justify-center sm:justify-start hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/chat')}
               >
-                Go to Dashboard
+                Go to Chat
                 <ArrowRight size={15} />
               </button>
             ) : (
@@ -684,8 +684,8 @@ export default function LandingNoir() {
 
         <div className="reveal-on-scroll reveal-delay-3">
           {isSignedIn ? (
-            <button className="py-4 px-14 border border-[#d4d4d8]/55 rounded-[6px] text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.24em] uppercase cursor-pointer transition-all duration-200 inline-flex items-center gap-3 hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white max-[640px]:w-full max-[640px]:justify-center" onClick={() => navigate('/dashboard')}>
-              Go to Dashboard
+            <button className="py-4 px-14 border border-[#d4d4d8]/55 rounded-[6px] text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.24em] uppercase cursor-pointer transition-all duration-200 inline-flex items-center gap-3 hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white max-[640px]:w-full max-[640px]:justify-center" onClick={() => navigate('/chat')}>
+              Go to Chat
               <ArrowRight size={16} />
             </button>
           ) : (

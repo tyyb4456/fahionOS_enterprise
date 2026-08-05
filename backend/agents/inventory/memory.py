@@ -1,6 +1,12 @@
 """
-RAG over brand policy documents + this agent's own run notes, backed by the
-Chroma instance already in docker-compose.yml.
+RAG over brand policy documents + this agent's own run notes, backed by
+the Chroma instance already in docker-compose.yml — accessed through
+langchain_chroma.Chroma (see agents/common/vector_store.py) rather than
+the raw chromadb client, so ingestion/retrieval go through LangChain's
+Document / similarity_search interface like the rest of the codebase.
+Embeddings come from a shared HuggingFace Inference API client
+(google/embeddinggemma-300m by default — see backend/test.ipynb for the
+exploratory version of this call).
 
 Two collections per brand:
   inventory_policies_{brand_id}  — ingested from Inventory Policy.pdf,
@@ -15,48 +21,37 @@ Two collections per brand:
                                     notes — that's the audit trail, this is
                                     the semantic index over it).
 
-Chroma is optional infrastructure: if it's unreachable we log a warning and
-return an empty list rather than failing the whole agent run.
+Chroma (and the HF embedding call) is optional infrastructure: if either
+is unreachable, we log a warning and return an empty list rather than
+failing the whole agent run.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import uuid
+
+from agents.common.vector_store import get_chroma_collection
 
 logger = logging.getLogger(__name__)
 
-CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
-CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
 
-_client = None
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        import chromadb
-        _client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
-    return _client
+def _policy_store(brand_id: str):
+    return get_chroma_collection(f"inventory_policies_{brand_id}")
 
 
-def _policy_collection(brand_id: str):
-    return _get_client().get_or_create_collection(f"inventory_policies_{brand_id}")
-
-
-def _memory_collection(brand_id: str):
-    return _get_client().get_or_create_collection(f"inventory_memory_{brand_id}")
+def _memory_store(brand_id: str):
+    return get_chroma_collection(f"inventory_memory_{brand_id}")
 
 
 async def retrieve_policies(brand_id: str, query: str, k: int = 3) -> list[str]:
     def _query() -> list[str]:
         try:
-            col = _policy_collection(brand_id)
-            if col.count() == 0:
+            store = _policy_store(brand_id)
+            if store._collection.count() == 0:
                 return []
-            res = col.query(query_texts=[query], n_results=k)
-            return res.get("documents", [[]])[0]
+            docs = store.similarity_search(query, k=k)
+            return [d.page_content for d in docs]
         except Exception:
             logger.warning("Policy RAG unavailable, continuing without it", exc_info=True)
             return []
@@ -72,11 +67,16 @@ async def ingest_policy_chunks(brand_id: str, chunks: list[str], source: str, do
     `document_id` tags every chunk so a specific upload can be deleted later
     even if two uploads share a filename — see delete_policy_document.
     """
+    from langchain_core.documents import Document
+
     def _add() -> int:
-        col = _policy_collection(brand_id)
+        store = _policy_store(brand_id)
         ids = [f"{document_id}-{i}" for i in range(len(chunks))]
-        metadatas = [{"source": source, "document_id": document_id} for _ in chunks]
-        col.add(documents=chunks, ids=ids, metadatas=metadatas)
+        docs = [
+            Document(page_content=chunk, metadata={"source": source, "document_id": document_id})
+            for chunk in chunks
+        ]
+        store.add_documents(docs, ids=ids)
         return len(chunks)
 
     return await asyncio.to_thread(_add)
@@ -85,8 +85,7 @@ async def ingest_policy_chunks(brand_id: str, chunks: list[str], source: str, do
 async def delete_policy_document(brand_id: str, document_id: str) -> None:
     def _delete() -> None:
         try:
-            col = _policy_collection(brand_id)
-            col.delete(where={"document_id": document_id})
+            _policy_store(brand_id).delete(where={"document_id": document_id})
         except Exception:
             logger.warning("Failed to delete policy document %s from Chroma", document_id, exc_info=True)
 
@@ -96,11 +95,11 @@ async def delete_policy_document(brand_id: str, document_id: str) -> None:
 async def retrieve_memory(brand_id: str, query: str, k: int = 3) -> list[str]:
     def _query() -> list[str]:
         try:
-            col = _memory_collection(brand_id)
-            if col.count() == 0:
+            store = _memory_store(brand_id)
+            if store._collection.count() == 0:
                 return []
-            res = col.query(query_texts=[query], n_results=k)
-            return res.get("documents", [[]])[0]
+            docs = store.similarity_search(query, k=k)
+            return [d.page_content for d in docs]
         except Exception:
             logger.warning("Memory RAG unavailable, continuing without it", exc_info=True)
             return []
@@ -109,10 +108,14 @@ async def retrieve_memory(brand_id: str, query: str, k: int = 3) -> list[str]:
 
 
 async def store_memory(brand_id: str, content: str, kind: str = "run_summary") -> None:
+    from langchain_core.documents import Document
+
     def _add() -> None:
         try:
-            col = _memory_collection(brand_id)
-            col.add(documents=[content], ids=[uuid.uuid4().hex], metadatas=[{"kind": kind}])
+            _memory_store(brand_id).add_documents(
+                [Document(page_content=content, metadata={"kind": kind})],
+                ids=[uuid.uuid4().hex],
+            )
         except Exception:
             logger.warning("Failed to write agent memory to Chroma", exc_info=True)
 

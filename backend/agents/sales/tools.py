@@ -3,18 +3,23 @@ Internal tools for the Sales Agent's ReAct loop — everything that isn't a
 live Shopify call (those come from shopify-mcp, see mcp_client.py). Each
 factory below binds `brand_id` in a closure so the LLM never has to supply
 it — same reasoning as agents/common/tool_scoping.py.
+
+flag_inventory_issue and notify_brand_owner are the two additions that make
+this agent operational rather than purely advisory: flag_inventory_issue
+writes directly into Inventory's own alert feed (a real, immediate
+cross-agent signal), and notify_brand_owner reaches the founder outside the
+dashboard. create_discount_code itself lives on shopify-mcp (see
+mcp_client.py) since it's a real Shopify write, not an internal tool.
 """
-import logging
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
+from agents.common.notify_tools import make_notify_brand_owner_tool
 from db import crud_sales as crud
 from db.session import AsyncSessionLocal
 
 from . import analytics
 from . import memory as rag
-
-logger = logging.getLogger(__name__)
 
 
 def build_internal_tools(brand_id: str) -> list[StructuredTool]:
@@ -26,8 +31,10 @@ def build_internal_tools(brand_id: str) -> list[StructuredTool]:
         _make_customer_segments_tool(brand_id),
         _make_customer_lookup_tool(brand_id),
         _make_cohort_tool(brand_id),
+        _make_flag_inventory_tool(brand_id),
         _make_policy_tool(brand_id),
         _make_memory_tool(brand_id),
+        make_notify_brand_owner_tool(brand_id, agent_name="Sales Agent"),
     ]
 
 
@@ -189,6 +196,33 @@ def _make_cohort_tool(brand_id: str) -> StructuredTool:
             "of each cohort returned to buy again in the following months."
         ),
         args_schema=_CohortArgs,
+        coroutine=_run,
+    )
+
+
+# ── flag_inventory_issue (operational write — cross-agent signal) ────────
+
+class _FlagInventoryArgs(BaseModel):
+    sku: str = Field(description="SKU the issue concerns.")
+    message: str = Field(description="What you found and why Inventory should look at it.")
+    severity: str = Field(default="medium", description="'low' | 'medium' | 'high' | 'critical'.")
+
+
+def _make_flag_inventory_tool(brand_id: str) -> StructuredTool:
+    async def _run(sku: str, message: str, severity: str = "medium") -> dict:
+        async with AsyncSessionLocal() as session:
+            result = await crud.create_inventory_flag(session, brand_id, sku, message, severity)
+            await session.commit()
+        return result
+
+    return StructuredTool.from_function(
+        name="flag_inventory_issue",
+        description=(
+            "Raise a cross-agent alert for the Inventory Agent when a revenue root-cause "
+            "traces back to stock — e.g. a top seller went out of stock and that's the real "
+            "reason revenue dropped. Writes directly into Inventory's own alert feed."
+        ),
+        args_schema=_FlagInventoryArgs,
         coroutine=_run,
     )
 

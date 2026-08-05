@@ -27,7 +27,7 @@ export default function App() {
             <Layout />
           </ProtectedRoute>
         }>
-          <Route path="dashboard" element={<Dashboard />} />
+          {/* <Route path="dashboard" element={<Dashboard />} /> */}
           <Route path="settings" element={<Settings />} />
           <Route path="chat" element={<Chat />} />
         </Route>

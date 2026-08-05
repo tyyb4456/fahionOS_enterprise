@@ -7,8 +7,8 @@ import MessageBubble from './chat/MessageBubble'
 import ConversationsSidebar from './chat/ConversationsSidebar'
 import ChatComposer from './chat/ChatComposer'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
-// const API_BASE = 'http://localhost:8080'
+// const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const API_BASE = 'http://localhost:8080'
 
 function getGreeting() {
   const hour = new Date().getHours()

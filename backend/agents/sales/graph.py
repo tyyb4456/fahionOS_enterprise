@@ -5,9 +5,10 @@ Same shape as agents/inventory/graph.py:
     build_context   (Step 1 — read Postgres: revenue, products, returns,
                       customers, discounts, daily revenue series)
         -> reason           (Steps 2-4 — ReAct loop; tools = live Shopify
-                              read data via shopify-mcp + revenue/KPI/
-                              anomaly/forecast math + customer segmentation/
-                              cohort + RAG, all called on demand)
+                              data via shopify-mcp + revenue/KPI/anomaly/
+                              forecast math + customer segmentation/cohort +
+                              RAG + real actions (create_discount_code,
+                              flag_inventory_issue), all called on demand)
         -> extract_decision (Step 5/6 — condense the transcript into the
                               structured SalesDecision)
         -> persist          (Step 7 — write reports/insights/forecasts/
@@ -19,11 +20,15 @@ It's the retrieve_policy / search_agent_memory tools in agents/sales/
 tools.py, backed by agents/sales/memory.py's Chroma collections — the
 ReAct loop calls them only when it decides it needs brand policy or
 past-run context.
+
+Operational note: create_discount_code (a real Shopify write, via
+shopify-mcp) and flag_inventory_issue (a real cross-agent DB write) make
+this agent operational rather than purely advisory — see
+agents/sales/prompts.py.
 """
 from __future__ import annotations
 
 import logging
-import os
 import time
 from typing import Any
 
@@ -42,12 +47,14 @@ from agents.common.tool_scoping import scope_tools_to_brand
 from db import crud_sales as crud
 from db.session import AsyncSessionLocal
 
-from .mcp_client import get_shopify_read_tools
+from .mcp_client import get_shopify_tools
 from .output_schema import SalesDecision
 from .prompt import SYSTEM_PROMPT, build_task_prompt
 from .state import SalesPipelineState
 from .tools import build_internal_tools
 
+from dotenv import load_dotenv
+load_dotenv()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -68,7 +75,7 @@ async def reasoning_node(state: SalesPipelineState) -> dict:
     brand_id = state["brand_id"]
     logger.info("[SalesAgent] Running reasoning node for brand_id=%s", brand_id)
 
-    shopify_tools = scope_tools_to_brand(await get_shopify_read_tools(), brand_id)
+    shopify_tools = scope_tools_to_brand(await get_shopify_tools(), brand_id)
     internal_tools = build_internal_tools(brand_id)
     tools = [*shopify_tools, *internal_tools]
 
@@ -108,7 +115,8 @@ async def reasoning_node(state: SalesPipelineState) -> dict:
 async def extract_decision_node(state: SalesPipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
     logger.info("[SalesAgent] Extracting structured decision for brand_id=%s", state["brand_id"])
-    model = init_chat_model("google_genai:gemini-3.6-flash")
+    
+    model = init_chat_model("google_genai:gemini-3.6-flash").with_structured_output(SalesDecision)
 
     transcript = "\n".join(
         f"{getattr(m, 'type', 'message')}: {m.content}"
@@ -117,7 +125,9 @@ async def extract_decision_node(state: SalesPipelineState) -> dict:
     )
 
     decision: SalesDecision = await model.ainvoke(
-        "Based on this analysis, produce the final structured sales decision:\n\n" + transcript
+        "Based on this analysis and its tool-call results, produce the final structured "
+        "sales decision. In actions_executed, list only things that actually happened "
+        "(a tool call succeeded) — not things merely proposed:\n\n" + transcript
     )
 
     logger.info("[SalesAgent] Decision extracted for brand_id=%s: summary=%s", state["brand_id"], decision.summary[:100] if decision.summary else "")
@@ -128,6 +138,7 @@ async def extract_decision_node(state: SalesPipelineState) -> dict:
         "anomalies": [a.model_dump() for a in decision.anomalies],
         "customer_segments": [c.model_dump() for c in decision.customer_segments],
         "recommendations": decision.recommendations,
+        "actions_executed": decision.actions_executed,
         "summary": decision.summary,
         "confidence": decision.confidence,
         "next_actions": decision.next_actions,
@@ -259,6 +270,7 @@ async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
         "anomalies": final_state.get("anomalies", []),
         "customer_segments": final_state.get("customer_segments", []),
         "recommendations": final_state.get("recommendations", []),
+        "actions_executed": final_state.get("actions_executed", []),
         "db_updates": final_state.get("db_updates", []),
         "confidence": final_state.get("confidence", 0.0),
         "next_actions": final_state.get("next_actions", []),
@@ -271,7 +283,8 @@ sales_agent = CompiledSubAgent(
     name="sales_agent",
     description=(
         "Sales & revenue analysis agent. Analyzes daily sales trends, calculates KPIs (AOV, Conversion), "
-        "detects revenue anomalies, and segments customer cohorts."
+        "detects revenue anomalies, and segments customer cohorts. Now operational: can create Shopify "
+        "discount codes and flag cross-agent inventory issues."
     ),
     runnable=get_sales_graph()
 )

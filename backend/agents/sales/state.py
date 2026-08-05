@@ -84,7 +84,7 @@ class SalesPipelineState(MessagesState, total=False):
     # ── step 1 + 3: context builder + RAG snapshot ───────────────────────
     context: SalesBusinessContext
 
-
+    # ── step 4:  ──────────
     tools_used: List[str]
 
     # ── step 5/6: decision generator output ───────────────────────────────
@@ -94,6 +94,7 @@ class SalesPipelineState(MessagesState, total=False):
     anomalies: List[AnomalyOut]
     customer_segments: List[CustomerSegmentOut]
     recommendations: List[str]
+    actions_executed: List[str]
     summary: str
     confidence: float
     next_actions: List[str]

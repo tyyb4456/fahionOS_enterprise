@@ -15,6 +15,43 @@ class Base(DeclarativeBase):
     pass
 
 # ══════════════════════════════════════════════════════════════════════════════
+# chat_tool_results  — persists structured tool output per chat turn
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ChatToolResult(Base):
+    """
+    One row per tool call (or persisted reasoning block) during a chat turn.
+
+    Keyed by (brand_id, thread_id, turn_index, label).
+    turn_index = 0-based index of the assistant message this belongs to,
+    computed by counting existing AI messages in the checkpoint at stream start.
+
+    data column stores the full structured JSON (InventoryAnalysis, etc.)
+    so the frontend can render rich cards when loading conversation history.
+    """
+    __tablename__ = "chat_tool_results"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    brand_id:  Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    thread_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+
+    turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Human-readable label for this row: a tool name (get_inventory_status),
+    # a comma-joined list of pipeline agents that ran (inventory,trend,pricing),
+    # or the reasoning sentinel (see deep_agents/streaming.py REASONING_SENTINEL).
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    data:    Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # brands  — tenant registry
 # ══════════════════════════════════════════════════════════════════════════════
 

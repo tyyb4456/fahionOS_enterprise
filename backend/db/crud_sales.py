@@ -8,6 +8,11 @@ Two kinds of tables, same split as db/crud_inventory.py:
   - AI-output tables (SalesReport, SalesInsight, SalesForecast,
     SalesAnomaly, CustomerSegment, + the shared AgentExecutionLog/
     AgentMemory via db/crud_common.py) — written only by this agent.
+
+create_inventory_flag is the one exception: it's a real, immediate write
+into InventoryAlert (Inventory's own table), the cross-agent signal that
+makes this agent operational rather than purely advisory — see
+agents/sales/tools.py::flag_inventory_issue.
 """
 from __future__ import annotations
 
@@ -424,6 +429,28 @@ async def save_customer_segments(session: AsyncSession, brand_id: str, segments:
                 customer_ids=s.get("customer_ids", []),
             ))
     await session.flush()
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Cross-agent signal — Sales flagging something for Inventory's attention
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def create_inventory_flag(session: AsyncSession, brand_id: str, sku: str, message: str, severity: str = "medium") -> dict:
+    """
+    Writes straight into InventoryAlert (Inventory's own table, type=
+    "sales_agent_flag") rather than a Sales-owned table, so it shows up
+    right alongside Inventory's own alerts in that agent's dashboard and
+    next context-builder run — the same "shared Postgres, no duplicate
+    tables" pattern this codebase already uses everywhere else.
+    """
+    from db.models import InventoryAlert
+    logger.info("Creating inventory flag for brand=%s sku=%s severity=%s", brand_id, sku, severity)
+    alert = InventoryAlert(
+        brand_id=brand_id, type="sales_agent_flag", severity=severity, sku=sku,
+        message=message, resolved=False,
+    )
+    session.add(alert)
+    await session.flush()
+    return {"alert_id": str(alert.id), "sku": sku, "severity": severity}
 
 
 async def log_execution(session: AsyncSession, brand_id: str, agent: str, task_type: str, status: str,

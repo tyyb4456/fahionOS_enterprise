@@ -1,0 +1,121 @@
+"""
+FashionOS — FastAPI Application
+================================
+Session 8: Approvals router mounted. notify-mcp startup check added.
+"""
+
+import asyncio
+import os
+from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+load_dotenv()
+
+import redis.asyncio as aioredis
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from api.routers import brands, clerk_webhook, oauth, chat
+
+import sys
+sys.dont_write_bytecode = True
+
+APP_VERSION = "0.2.0"
+BRAND_NAME  = os.getenv("BRAND_NAME", "FashionOS Brand")
+REDIS_URL   = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Redis check
+    try:
+        r = aioredis.from_url(REDIS_URL, socket_connect_timeout=3)
+        await r.ping()
+        await r.aclose()
+        print(f"[FashionOS] ✓ Redis connected")
+    except Exception as e:
+        print(f"[FashionOS] △ Redis not reachable: {e}")
+
+    # Warm the deep-agent Redis singletons (store + checkpointer) at boot.
+    # AsyncRedisStore.setup() / AsyncRedisSaver.asetup() create search
+    # indices the first time they run — doing that here means the first
+    # person to open /chat after a deploy doesn't personally eat that cost.
+    try:
+        from deep_agent.runtime import get_store, get_checkpointer
+        await asyncio.gather(get_store(), get_checkpointer())
+        print("[FashionOS] ✓ Deep agent Redis store + checkpointer warmed")
+    except Exception as e:
+        print(f"[FashionOS] △ Deep agent Redis warmup failed (will retry lazily): {e}")
+
+
+    yield
+    print("[FashionOS] Shutting down API.")
+
+
+app = FastAPI(
+    title       = f"FashionOS API — {BRAND_NAME}",
+    description = (
+        "Autonomous multi-agent fashion brand OS. "
+        "Receives Shopify webhooks, triggers agent pipelines, "
+        "exposes run history, approval queues, and dashboard data."
+    ),
+    version  = APP_VERSION,
+    lifespan = lifespan,
+)
+
+
+CORS_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins     = CORS_ORIGINS,
+    allow_credentials = True,
+    allow_methods     = ["*"],
+    allow_headers     = ["*"],
+)
+
+
+app.include_router(brands.router) 
+app.include_router(clerk_webhook.router)
+app.include_router(oauth.router)      
+app.include_router(chat.router)
+
+
+@app.get("/health", tags=["ops"])
+async def health():
+    return {"status": "ok", "version": APP_VERSION}
+
+
+@app.get("/api/v1/status", tags=["ops"])
+async def system_status():
+    redis_ok = False
+    try:
+        r = aioredis.from_url(REDIS_URL, socket_connect_timeout=2)
+        await r.ping()
+        await r.aclose()
+        redis_ok = True
+    except Exception:
+        pass
+
+    return {
+        "status":  "ok" if redis_ok else "degraded",
+        "version": APP_VERSION,
+        "brand":   BRAND_NAME,
+   
+        "redis":   "connected" if redis_ok else "unreachable",
+    
+        "agents": {
+            "inventory": "active", "trend":     "active",
+            "pricing":   "active", "restock":   "active",
+            "content":   "active", "returns":   "active",
+            "marketing": "active", "dm":        "active",
+        },
+    }

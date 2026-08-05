@@ -1,6 +1,7 @@
 """
 Structured shape the agent's free-form reasoning gets condensed into
-(Step 5/6 — Decision Generator) via ChatAnthropic.with_structured_output().
+(Step 5/6 — Decision Generator) via a structured-output model call — see
+extract_decision_node in graph.py.
 """
 from typing import List, Literal, Optional
 
@@ -46,7 +47,9 @@ class CustomerSegmentItem(BaseModel):
 
 class SalesDecision(BaseModel):
     """The final structured output — mirrors the design doc's
-    'What gets returned to the Supervisor' shape."""
+    'What gets returned to the Supervisor' shape, plus actions_executed
+    now that this agent can act (create_discount_code, flag_inventory_issue),
+    not just recommend."""
     summary: str
     kpis: KpiReport = KpiReport()
     insights: List[SalesInsightItem] = []
@@ -54,5 +57,6 @@ class SalesDecision(BaseModel):
     anomalies: List[SalesAnomalyItem] = []
     customer_segments: List[CustomerSegmentItem] = []
     recommendations: List[str] = []
+    actions_executed: List[str] = []
     confidence: float = Field(ge=0, le=1, default=0.5)
     next_actions: List[str] = []
