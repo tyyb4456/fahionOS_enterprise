@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_brand, require_admin
+from api.routers.oauth import revoke_meta_token, unregister_shopify_webhooks
 from db.credentials import BrandCredentials, cache_brand_credentials, decrypt_value, encrypt_value
 from db.models import Brand
 from db.session import get_session
@@ -72,8 +73,11 @@ def _to_response(b: Brand) -> BrandResponse:
         brand_owner_whatsapp = b.brand_owner_whatsapp,
         brand_owner_email    = b.brand_owner_email,
         shopify_connected    = bool(b.shopify_access_token_enc),
-        meta_connected       = bool(b.meta_access_token_enc),
-        instagram_connected  = bool(b.instagram_access_token_enc),
+        meta_connected        = bool(b.meta_access_token_enc),
+        # Previously `bool(b.instagram_access_token_enc)` alone — that could
+        # be True even with no Instagram Business Account actually linked
+        # (see oauth.py meta_oauth_callback fix). Require both now.
+        instagram_connected  = bool(b.instagram_page_id and b.instagram_access_token_enc),
         created_at           = b.created_at,
     )
 
@@ -167,8 +171,24 @@ async def disconnect_shopify(
     brand:   Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
-    """Disconnect Shopify — clears token from DB and Redis."""
+    """Disconnect Shopify — unregisters our webhooks on Shopify's side first
+    (so subscriptions don't pile up on reconnect), then clears the token
+    from DB and Redis."""
     logger.info("Disconnecting Shopify for brand_id=%s", brand.brand_id)
+
+    if brand.shopify_shop_name and brand.shopify_access_token_enc:
+        try:
+            await unregister_shopify_webhooks(
+                brand.shopify_shop_name,
+                decrypt_value(brand.shopify_access_token_enc),
+                brand.brand_id,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to unregister Shopify webhooks for brand_id=%s — continuing disconnect anyway",
+                brand.brand_id,
+            )
+
     brand.shopify_shop_name          = None
     brand.shopify_access_token_enc   = None
     brand.shopify_webhook_secret_enc = None
@@ -183,8 +203,19 @@ async def disconnect_meta(
     brand:   Brand = Depends(get_current_brand),
     session: AsyncSession = Depends(get_session),
 ):
-    """Disconnect Meta — clears token from DB and Redis."""
+    """Disconnect Meta — revokes the token on Meta's side first, then clears
+    it from DB and Redis."""
     logger.info("Disconnecting Meta for brand_id=%s", brand.brand_id)
+
+    if brand.meta_access_token_enc:
+        try:
+            await revoke_meta_token(decrypt_value(brand.meta_access_token_enc))
+        except Exception:
+            logger.exception(
+                "Failed to revoke Meta token for brand_id=%s — continuing disconnect anyway",
+                brand.brand_id,
+            )
+
     brand.meta_access_token_enc      = None
     brand.meta_ad_account_id         = None
     brand.instagram_access_token_enc = None
@@ -192,4 +223,4 @@ async def disconnect_meta(
     brand.updated_at                 = datetime.now(timezone.utc)
     await session.flush()
     await cache_brand_credentials(brand.brand_id, _build_creds(brand))
-    logger.info("Meta disconnected for brand_id=%s", brand.brand_id)
+    logger.info("Meta disconnected for brand_id=%s", brand.brand_id)

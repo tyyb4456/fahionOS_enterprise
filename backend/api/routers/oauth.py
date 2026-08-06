@@ -7,7 +7,7 @@ Shopify:
 
 Meta:
   GET /api/v1/oauth/meta/start                  → redirect URL
-  GET /api/v1/oauth/meta/callback               → exchange code, fetch ad account + IG page, store
+  GET /api/v1/oauth/meta/callback                → exchange code, fetch ad account + IG page, store
 
 Security: state = CSRF token stored in Redis (10 min TTL) → links callback to brand
 """
@@ -51,6 +51,14 @@ SHOPIFY_SCOPES        = os.getenv(
     "write_inventory,read_price_rules,write_price_rules",
 )
 SHOPIFY_API_VERSION   = "2026-04"
+SHOPIFY_WEBHOOK_TOPICS = [
+    "orders/paid",
+    "orders/cancelled",
+    "refunds/create",
+    "inventory_levels/update",
+    "products/update",
+]
+API_BASE_URL = os.getenv("API_BASE_URL", "https://your-domain.com")
 
 # ── Meta config ────────────────────────────────────────────────────────────────
 META_CLIENT_ID      = os.getenv("META_CLIENT_ID", "")
@@ -104,6 +112,73 @@ async def _sync_creds(brand: Brand) -> None:
         brand_owner_whatsapp   = brand.brand_owner_whatsapp or "",
         brand_owner_email      = brand.brand_owner_email or "",
     ))
+
+
+# ── Shopify webhook helpers ─────────────────────────────────────────────────────
+# Used by shopify_oauth_callback (register) and brands.py's disconnect_shopify
+# (unregister). Kept idempotent/address-scoped so connect/reconnect/disconnect
+# don't leave duplicate or orphaned subscriptions on Shopify's side.
+
+async def _list_shopify_webhooks(shop_domain: str, access_token: str) -> list[dict]:
+    """Lists webhooks currently registered under this shop for our token."""
+    base = f"https://{shop_domain}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}"
+    headers = {"X-Shopify-Access-Token": access_token}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(f"{base}/webhooks.json", headers=headers, params={"limit": 250})
+        if not r.is_success:
+            logger.error("Failed to list Shopify webhooks for shop=%s: %s", shop_domain, r.text)
+            return []
+        return r.json().get("webhooks", [])
+
+
+async def register_shopify_webhooks(shop_domain: str, access_token: str, brand_id: str) -> None:
+    """Registers the topics this app needs. Idempotent — skips any topic
+    already registered at our exact callback address, so calling this again
+    on a reconnect doesn't create duplicate subscriptions (and duplicate
+    orders/paid processing downstream)."""
+    base = f"https://{shop_domain}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}"
+    headers = {"X-Shopify-Access-Token": access_token, "Content-Type": "application/json"}
+
+    existing = await _list_shopify_webhooks(shop_domain, access_token)
+    existing_pairs = {(w.get("topic"), w.get("address")) for w in existing}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for topic in SHOPIFY_WEBHOOK_TOPICS:
+            webhook_url = f"{API_BASE_URL}/api/v1/webhooks/shopify/{brand_id}/{topic}"
+            if (topic, webhook_url) in existing_pairs:
+                logger.info("Shopify webhook already registered, skipping: shop=%s topic=%s", shop_domain, topic)
+                continue
+            r = await client.post(
+                f"{base}/webhooks.json",
+                headers=headers,
+                json={"webhook": {"topic": topic, "address": webhook_url, "format": "json"}},
+            )
+            if not r.is_success:
+                logger.error("Failed to register Shopify webhook shop=%s topic=%s: %s", shop_domain, topic, r.text)
+            else:
+                logger.info("Registered Shopify webhook shop=%s topic=%s", shop_domain, topic)
+
+
+async def unregister_shopify_webhooks(shop_domain: str, access_token: str, brand_id: str) -> None:
+    """Deletes only the webhooks we registered for this brand (matched by our
+    own callback address prefix), leaving any webhooks other apps/integrations
+    have on the same shop untouched. Note: if API_BASE_URL changes between
+    connect and disconnect, the prefix match will miss — acceptable tradeoff
+    for not needing to store webhook ids separately."""
+    our_prefix = f"{API_BASE_URL}/api/v1/webhooks/shopify/{brand_id}/"
+    base = f"https://{shop_domain}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}"
+    headers = {"X-Shopify-Access-Token": access_token}
+
+    existing = await _list_shopify_webhooks(shop_domain, access_token)
+    ours = [w for w in existing if (w.get("address") or "").startswith(our_prefix)]
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for w in ours:
+            r = await client.delete(f"{base}/webhooks/{w['id']}.json", headers=headers)
+            if not r.is_success:
+                logger.error("Failed to delete Shopify webhook id=%s shop=%s: %s", w.get("id"), shop_domain, r.text)
+
+    logger.info("Unregistered %d Shopify webhooks for shop=%s brand_id=%s", len(ours), shop_domain, brand_id)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -161,22 +236,30 @@ async def shopify_oauth_callback(
     # ── 1. Verify HMAC (Shopify signs the callback) ────────────────────────────
     # Shopify signs ALL query params (except 'hmac'), sorted alphabetically.
     # Hardcoding only code/shop/state breaks when Shopify adds extra params like 'host'.
-    if SHOPIFY_CLIENT_SECRET and hmac_param:
-        params_to_sign = {
-            k: v for k, v in request.query_params.items()
-            if k != "hmac"
-        }
-        query_string = "&".join(
-            f"{k}={v}" for k, v in sorted(params_to_sign.items())
-        )
-        computed = hmac.new(
-            SHOPIFY_CLIENT_SECRET.encode(),
-            query_string.encode(),
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(computed, hmac_param):
-            logger.error("Shopify OAuth callback HMAC signature verification failed")
-            raise HTTPException(400, "Invalid HMAC signature.")
+    # Both checks below are now mandatory — this used to be skipped whenever
+    # SHOPIFY_CLIENT_SECRET or hmac_param was falsy, which is a fail-open bug.
+    if not SHOPIFY_CLIENT_SECRET:
+        logger.error("Shopify OAuth callback failed: SHOPIFY_CLIENT_SECRET not configured")
+        raise HTTPException(500, "SHOPIFY_CLIENT_SECRET not configured.")
+    if not hmac_param:
+        logger.error("Shopify OAuth callback failed: missing hmac param")
+        raise HTTPException(400, "Missing HMAC signature.")
+
+    params_to_sign = {
+        k: v for k, v in request.query_params.items()
+        if k != "hmac"
+    }
+    query_string = "&".join(
+        f"{k}={v}" for k, v in sorted(params_to_sign.items())
+    )
+    computed = hmac.new(
+        SHOPIFY_CLIENT_SECRET.encode(),
+        query_string.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(computed, hmac_param):
+        logger.error("Shopify OAuth callback HMAC signature verification failed")
+        raise HTTPException(400, "Invalid HMAC signature.")
 
     # ── 2. Verify state → get brand_id ────────────────────────────────────────
     brand_id = await _get_state(state)
@@ -222,34 +305,8 @@ async def shopify_oauth_callback(
     await session.flush()
     await _sync_creds(brand)
 
-    # ── 6. Register webhooks automatically ─────────────────────────────────────
-    topics = [
-        "orders/paid",
-        "orders/cancelled",
-        "refunds/create",
-        "inventory_levels/update",
-        "products/update",
-    ]
-    headers = {
-        "X-Shopify-Access-Token": access_token,
-        "Content-Type": "application/json",
-    }
-    base = f"https://{shop_domain}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}"
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for topic in topics:
-            webhook_url = f"{os.getenv('API_BASE_URL', 'https://your-domain.com')}/api/v1/webhooks/shopify/{brand_id}/{topic}"
-            await client.post(
-                f"{base}/webhooks.json",
-                headers=headers,
-                json={
-                    "webhook": {
-                        "topic":   topic,
-                        "address": webhook_url,
-                        "format":  "json",
-                    }
-                },
-            )
+    # ── 6. Register webhooks automatically (idempotent — safe on reconnect) ────
+    await register_shopify_webhooks(shop_domain, access_token, brand_id)
 
     logger.info("Successfully connected Shopify for brand_id=%s, shop=%s", brand_id, shop_domain)
 
@@ -259,6 +316,18 @@ async def shopify_oauth_callback(
 # ══════════════════════════════════════════════════════════════════════════════
 # META OAUTH
 # ══════════════════════════════════════════════════════════════════════════════
+
+async def revoke_meta_token(access_token: str) -> None:
+    """Revokes this app's permission grant on Meta's side so the token can't
+    be used again after disconnect — Meta doesn't invalidate a token just
+    because we stop storing it. Used by brands.py's disconnect_meta."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.delete(f"{META_GRAPH_URL}/me/permissions", params={"access_token": access_token})
+        if not r.is_success:
+            logger.error("Failed to revoke Meta token: %s", r.text)
+        else:
+            logger.info("Revoked Meta token successfully")
+
 
 @router.get("/meta/start")
 async def meta_oauth_start(brand: Brand = Depends(get_current_brand)):
@@ -381,13 +450,31 @@ async def meta_oauth_callback(
                 break
 
     # ── 6. Store in DB (encrypted) ─────────────────────────────────────────────
-    brand.meta_access_token_enc      = encrypt_value(long_token)
-    brand.meta_ad_account_id         = ad_account_id or ""
-    brand.instagram_access_token_enc = encrypt_value(instagram_access_token)
-    brand.instagram_page_id          = instagram_page_id or ""
+    brand.meta_access_token_enc = encrypt_value(long_token)
+    brand.meta_ad_account_id    = ad_account_id or ""
+
+    # Only store an Instagram token/page if we actually found a linked IG
+    # Business Account. Previously instagram_access_token_enc was set to the
+    # fallback user token even when instagram_page_id came back empty, which
+    # made instagram_connected read True with nothing usable behind it — the
+    # Marketing Agent would then try to publish with an empty page id. This
+    # also correctly clears stale values on a reconnect where the IG link
+    # was removed since last time.
+    if instagram_page_id:
+        brand.instagram_access_token_enc = encrypt_value(instagram_access_token)
+        brand.instagram_page_id          = instagram_page_id
+    else:
+        brand.instagram_access_token_enc = None
+        brand.instagram_page_id          = None
+        logger.warning(
+            "Meta connected for brand_id=%s but no Instagram Business Account "
+            "found on any managed page — Instagram features unavailable until "
+            "a page has an IG Business Account linked.", brand_id,
+        )
+
     await session.flush()
     await _sync_creds(brand)
 
     logger.info("Successfully connected Meta for brand_id=%s, ad_account_id=%s, ig_page_id=%s", brand_id, ad_account_id, instagram_page_id)
 
-    return RedirectResponse(url=f"{FRONTEND_URL}/settings?meta=connected")
+    return RedirectResponse(url=f"{FRONTEND_URL}/settings?meta=connected")

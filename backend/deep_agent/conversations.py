@@ -9,7 +9,7 @@ from the LangGraph checkpoint for the chat history view.
 import logging
 from datetime import datetime, timezone
 
-from deep_agents.runtime import get_store, get_checkpointer, get_cached_agent
+from deep_agent.runtime import get_store, get_checkpointer, get_cached_agent
 
 logger = logging.getLogger(__name__)
 

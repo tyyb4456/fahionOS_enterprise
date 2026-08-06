@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from svix.webhooks import Webhook, WebhookVerificationError
 
@@ -79,7 +80,12 @@ async def clerk_webhook(
         if not existing:
             email      = _extract_email(user)
             brand_name = _extract_name(user)
-            brand_id   = f"brand_{clerk_id[:12].lower()}"
+            # Use the full clerk_id, not a slice of it. clerk_id[:12] used to
+            # keep the constant "user_" prefix (5 chars) plus only ~7 chars
+            # of actual entropy — a real collision risk against brand_id's
+            # UNIQUE constraint as the user base grows. brand_id is String(100)
+            # and Clerk ids comfortably fit, so there's no need to truncate.
+            brand_id   = f"brand_{clerk_id.lower()}"
 
             session.add(Brand(
                 id            = uuid.uuid4(),
@@ -90,8 +96,24 @@ async def clerk_webhook(
                 plan          = "starter",
                 is_active     = True,
             ))
-            await session.flush()
-            logger.info("Auto-provisioned brand_id=%s for email=%s via Clerk webhook", brand_id, email)
+            try:
+                await session.flush()
+                logger.info("Auto-provisioned brand_id=%s for email=%s via Clerk webhook", brand_id, email)
+            except IntegrityError:
+                # Clerk retries webhook deliveries on any non-2xx response or
+                # timeout, so two deliveries of the same user.created event
+                # can land concurrently and both pass the `existing` check
+                # above before either commits. The loser hits a unique
+                # violation on clerk_user_id/brand_id/owner_email here —
+                # that's expected under a race, not a real failure, so we
+                # roll back and treat it as "already provisioned" instead of
+                # bubbling a 500 back to Clerk (which would just trigger yet
+                # another retry).
+                await session.rollback()
+                logger.warning(
+                    "Brand provisioning race detected for clerk_id=%s (likely a duplicate "
+                    "webhook delivery) — treating as already provisioned.", clerk_id,
+                )
         else:
             logger.info("Brand for clerk_id=%s already exists, skipping creation", clerk_id)
 
@@ -117,4 +139,4 @@ async def clerk_webhook(
             brand.updated_at = datetime.now(timezone.utc)
             logger.info("Deactivated brand_id=%s via Clerk webhook", brand.brand_id)
 
-    return {"received": True, "type": event_type}
+    return {"received": True, "type": event_type}

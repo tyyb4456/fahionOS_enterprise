@@ -15,7 +15,12 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import brands, clerk_webhook, oauth, chat
+from api.routers import brands, clerk_webhook, oauth, chat, shopify_webhook, policy_documents
+from api.routers.agents import (
+    inventory as inventory_agent,
+    sales as sales_agent,
+    marketing as marketing_agent,
+)
 
 import sys
 sys.dont_write_bytecode = True
@@ -83,10 +88,19 @@ app.add_middleware(
 )
 
 
-app.include_router(brands.router) 
+app.include_router(brands.router)
 app.include_router(clerk_webhook.router)
-app.include_router(oauth.router)      
+app.include_router(oauth.router)
 app.include_router(chat.router)
+
+# Previously missing — Shopify webhooks registered in api/routers/oauth.py
+# point at shopify_webhook.router's routes, so without this mounted, every
+# webhook Shopify sends 404s and the Postgres mirror never syncs.
+app.include_router(shopify_webhook.router)
+app.include_router(policy_documents.router)
+app.include_router(inventory_agent.router)
+app.include_router(sales_agent.router)
+app.include_router(marketing_agent.router)
 
 
 @app.get("/health", tags=["ops"])
@@ -109,13 +123,12 @@ async def system_status():
         "status":  "ok" if redis_ok else "degraded",
         "version": APP_VERSION,
         "brand":   BRAND_NAME,
-   
+
         "redis":   "connected" if redis_ok else "unreachable",
-    
+
         "agents": {
-            "inventory": "active", "trend":     "active",
-            "pricing":   "active", "restock":   "active",
-            "content":   "active", "returns":   "active",
-            "marketing": "active", "dm":        "active",
+            "inventory": "active",
+            "sales":     "active",
+            "marketing": "active",
         },
     }
