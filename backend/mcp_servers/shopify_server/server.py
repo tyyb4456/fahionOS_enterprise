@@ -11,7 +11,7 @@ Write tools : update_product_price, set_inventory_level,
 import logging
 import os
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastmcp import FastMCP
 from dotenv import load_dotenv
@@ -294,7 +294,7 @@ async def get_recent_orders(brand_id: str, hours: int = 24, paid_only: bool = Tr
     Returns orders with their line items (sku, quantity, price).
     Used by: Inventory Agent (velocity), Pricing Agent, Marketing Agent.
     """
-    since = (datetime.now() - timedelta(hours=hours)).isoformat() + "Z"
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     params: dict = {
         "created_at_min": since,
         "limit":          250,
@@ -344,7 +344,7 @@ async def get_returns(brand_id: str, days: int = 30) -> list[dict]:
     Notes are free-text reason fields — cluster them to find patterns.
     Used by: Returns Agent.
     """
-    since = (datetime.now() - timedelta(days=days)).isoformat() + "Z"
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     try:
         data = await _shopify_get(brand_id, "orders.json", {
             "created_at_min": since,
@@ -388,7 +388,7 @@ async def calculate_sales_velocity(brand_id: str, days: int = 14) -> list[dict]:
     This is the primary signal for stockout prediction and pricing decisions.
     Used by: Inventory Agent, Pricing Agent, Restock Agent, Marketing Agent.
     """
-    since = (datetime.now() - timedelta(days=days)).isoformat() + "Z"
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     try:
         data = await _shopify_get(brand_id, "orders.json", {
             "created_at_min":   since,
@@ -496,7 +496,7 @@ async def set_inventory_level(
     Used by: Inventory Agent (corrections), Restock Agent (after delivery).
     """
     try:
-        result = await _shopify_get(brand_id, "inventory_levels/set.json", {
+        result = await _shopify_post(brand_id, "inventory_levels/set.json", {
             "inventory_item_id": inventory_item_id,
             "location_id":       location_id,
             "available":         available,
@@ -551,7 +551,7 @@ async def create_restock_recommendation(
         "reason":                  reason,
         "supplier_message":        supplier_message,
         "status":                  "pending_approval",
-        "created_at":              datetime.now().isoformat() + "Z",
+        "created_at":              datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -660,7 +660,7 @@ async def get_abandoned_checkouts(brand_id: str, hours: int = 24) -> list[dict]:
     cart abandonment rather than a real demand drop.
     Used by: Sales Agent (root-cause analysis on revenue changes).
     """
-    since = (datetime.now() - timedelta(hours=hours)).isoformat() + "Z"
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     try:
         data = await _shopify_get(brand_id, "checkouts.json", {
             "created_at_min": since,

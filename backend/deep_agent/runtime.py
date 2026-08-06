@@ -20,7 +20,9 @@ import logging
 import os
 from pathlib import Path
 
-from deepagents import FilesystemPermission, create_deep_agent
+from typing import Any
+
+from deepagents import DeepAgentState, FilesystemPermission, create_deep_agent
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend, FilesystemBackend
 from dotenv import load_dotenv
 from langgraph.store.redis.aio import AsyncRedisStore
@@ -40,6 +42,22 @@ load_dotenv()
 REDIS_URL  = os.getenv("REDIS_URL", "redis://localhost:6379")
 BASE_DIR   = Path(__file__).parent.resolve()
 SKILLS_DIR = BASE_DIR / "skills"
+
+
+class FashionOSAgentState(DeepAgentState, total=False):
+    """
+    Supervisor state schema = DeepAgentState + brand identity.
+
+    DeepAgents' SubAgentMiddleware forwards the parent's full state (minus a
+    few excluded keys) into each CompiledSubAgent run. The inventory/sales/
+    marketing graphs read `state["brand_id"]` (and `state.get("task")`) on
+    their very first node, so without `brand_id` in the supervisor's schema
+    delegation crashed with `KeyError: 'brand_id'` the instant the main agent
+    called a subagent — before any pipeline node ran. Declaring the key here
+    makes it flow: API -> supervisor state -> subagent state.
+    """
+    brand_id: str
+    task: dict[str, Any]
 
 
 # ── Singletons ────────────────────────────────────────────────────────────────
@@ -111,6 +129,7 @@ async def build_supervisor(brand_id: str, brand_name: str):
         memory        = ["/memories/AGENTS.md"],
         # skills        = ["/skills/"],
         checkpointer  = checkpointer,
+        state_schema  = FashionOSAgentState,
     )
     return agent
 

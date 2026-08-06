@@ -143,7 +143,7 @@ async def chat(brand_id: str, brand_name: str, message: str, thread_id: str = "d
     config        = {"configurable": {"thread_id": scoped_thread}}
 
     result = await agent.ainvoke(
-        {"messages": [{"role": "user", "content": message}]},
+        {"messages": [{"role": "user", "content": message}], "brand_id": brand_id},
         config=config,
     )
     msgs = result.get("messages", [])
@@ -193,7 +193,7 @@ async def stream_chat(
 
     try:
         async for chunk in agent.astream(
-            {"messages": [{"role": "user", "content": message}]},
+            {"messages": [{"role": "user", "content": message}], "brand_id": brand_id},
             config=config,
             stream_mode="messages",
         ):
