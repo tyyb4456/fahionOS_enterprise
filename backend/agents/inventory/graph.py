@@ -256,11 +256,17 @@ async def run_inventory_agent(brand_id: str, task: dict) -> dict[str, Any]:
 inventory_agent = CompiledSubAgent(
     name="inventory_agent",
     description=(
-        "Autonomous inventory and supply chain agent. Responsible for forecasting SKU demand, "
-        "detecting stockout risks, calculating safety stock and reorder quantities, looking up supplier "
-        "terms & warehouse capacity, issuing purchase orders, and sending automated supplier notifications. "
-        "Pass task dict containing 'task_type' (e.g. 'forecast_inventory', 'check_stockouts', 'reorder_analysis', "
-        "'overstock_analysis', or 'full_inventory_review'), 'brand_id', and optional parameters like 'forecast_days' or 'sku'."
+        "Inventory & supply chain operations agent. Forecasts SKU demand and days-until-stockout, detects "
+        "stockout/overstock risk, computes safety stock and reorder quantities, checks supplier terms (lead time, "
+        "minimum order qty, pricing, reliability) and warehouse capacity, and accounts for upcoming seasonal "
+        "demand. Reads live Shopify product/order/inventory data plus notes from its past runs. "
+        "OPERATIONAL: it can actually place purchase orders (real DB rows), notify suppliers via WhatsApp/email, "
+        "correct Shopify inventory levels, create restock recommendations, and alert the brand owner — it acts, "
+        "it doesn't just recommend. "
+        "Delegate whenever the founder asks about stock levels, restocking, supply chain, suppliers, or a specific "
+        "forecast task (forecast_inventory, check_stockouts, reorder_analysis, overstock_analysis, "
+        "full_inventory_review). In the task description, state the goal clearly and include any specifics (SKU(s), "
+        "forecast window, priority); the agent pulls the rest of the context it needs."
     ),
     runnable=get_inventory_graph()
 )

@@ -268,8 +268,17 @@ async def run_marketing_agent(brand_id: str, task: dict) -> dict[str, Any]:
 marketing_agent = CompiledSubAgent(
     name="marketing_agent",
     description=(
-        "Autonomous marketing agent. Responsible for campaign planning, ad spend optimization, "
-        "social content generation, and audience segmentation based on sales & inventory insights."
+        "Marketing & growth agent — the brand's Chief Marketing Officer. Plans campaigns, ranks target audiences "
+        "from real customer segments, picks best posting times, and generates on-brand copy (social captions + "
+        "hashtags, emails, SMS). Reads the Sales & Inventory agents' outputs (insights, alerts, segments) and "
+        "checks stock so it never promotes out-of-stock items. "
+        "OPERATIONAL: it can publish Instagram posts, create/pause/resume Meta Ads campaigns, adjust ad budgets, "
+        "and schedule content for auto-publish — it launches campaigns, not just plans them — and can alert the "
+        "brand owner. "
+        "Delegate for anything about campaigns, ads, ad spend, social/Instagram content, audience targeting, "
+        "promotions, or growth (plan_marketing, daily_content, campaign_analysis, launch_campaign, "
+        "audience_analysis). Include the objective/goal in the task description, plus budget and timeline when "
+        "relevant."
     ),
     runnable=get_marketing_graph()
 )

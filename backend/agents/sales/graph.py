@@ -282,9 +282,17 @@ async def run_sales_agent(brand_id: str, task: dict) -> dict[str, Any]:
 sales_agent = CompiledSubAgent(
     name="sales_agent",
     description=(
-        "Sales & revenue analysis agent. Analyzes daily sales trends, calculates KPIs (AOV, Conversion), "
-        "detects revenue anomalies, and segments customer cohorts. Now operational: can create Shopify "
-        "discount codes and flag cross-agent inventory issues."
+        "Sales & revenue intelligence agent — the brand's Chief Revenue Officer. Analyzes daily sales trends and "
+        "KPIs (revenue, orders, AOV, refund rate, repeat-customer rate), detects statistically-confirmed revenue/order "
+        "anomalies, forecasts revenue, ranks products (best/worst sellers, ABC analysis), segments customers "
+        "(VIP/Loyal/New/At Risk/Inactive), computes cohort retention, and looks up individual customer history. "
+        "Root-causes revenue changes (stockouts, refund spikes, discount overreach, ended campaigns) and answers "
+        "ad-hoc revenue questions. "
+        "OPERATIONAL: it can create real Shopify discount codes, flag inventory issues straight into the Inventory "
+        "agent's alert feed, and alert the brand owner — it acts, it doesn't just report. "
+        "Delegate for anything about sales performance, revenue, KPIs, anomalies, forecasts, customer segments, or a "
+        "revenue drop/question (analyze_sales, answer_question, revenue_report, customer_segmentation, "
+        "forecast_revenue). Include the question or objective in the task description, plus a time range when relevant."
     ),
     runnable=get_sales_graph()
 )
