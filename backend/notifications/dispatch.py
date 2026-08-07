@@ -96,4 +96,4 @@ async def send_email(to: str, subject: str, body: str) -> dict:
         logger.info("[notify:email] Sent email successfully to %s", to)
         return {"sent": True, "channel": "email", "to": to}
     logger.error("[notify:email] API returned error for %s: %s", to, r.text)
-    return {"sent": False, "channel": "email", "to": to, "error": r.text}
+    return {"sent": False, "channel": "email", "to": to, "error": r.text}

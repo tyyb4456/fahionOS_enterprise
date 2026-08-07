@@ -75,11 +75,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
     internal_tools = build_internal_tools(brand_id)
     tools = [*shopify_tools, *internal_tools]
 
-    model = ChatMistralAI(
-        model="mistral-medium-3-5",
-        temperature=0,
-        model_kwargs={"reasoning_effort": "high"},
-    )
+    model = init_chat_model("google_genai:gemini-3.6-flash")
 
     agent = create_deep_agent(model, tools)
 

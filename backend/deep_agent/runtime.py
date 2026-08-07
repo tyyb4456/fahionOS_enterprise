@@ -35,6 +35,7 @@ from deep_agent.load_model import mistral
 from agents.inventory.graph import inventory_agent
 from agents.sales.graph import sales_agent
 from agents.marketing.graph import marketing_agent
+from agents.finance.graph import finance_agent
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -123,7 +124,7 @@ async def build_supervisor(brand_id: str, brand_name: str):
         name          = f"fashionos-{brand_id}",
         model         = mistral,
         system_prompt = build_prompt(brand_id, brand_name),
-        subagents     = [inventory_agent, sales_agent, marketing_agent],
+        subagents     = [inventory_agent, sales_agent, marketing_agent, finance_agent],
         backend       = backend,
         store         = store,
         memory        = ["/memories/AGENTS.md"],

@@ -134,6 +134,11 @@ class ProductVariant(Base):
     price:              Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
     compare_at_price:   Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     inventory_quantity: Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    # Manually entered via dashboard/seed (Shopify's REST fields config here
+    # doesn't sync unit cost) — needed for the Finance Agent's margin/
+    # profitability math. Nullable: agents must flag SKUs where it's unset
+    # rather than guessing a cost.
+    cost_price:         Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     synced_at:          Mapped[datetime]  = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -549,3 +554,93 @@ class ContentPerformance(Base):
     conversion:           Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
     roas:                 Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     recorded_at:          Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Finance Agent — operational + AI-generated financial intelligence.
+# Expense is operational (dashboard/seed-populated, read-only from the
+# agent's perspective — same role as Inventory's Supplier/Warehouse), plus
+# record_expense lets the agent log a confirmed cost mid-run. FinancialReport
+# /FinancialForecast/FinancialInsight/BudgetRecommendation/RiskAssessment
+# are AI-output tables, written only by this agent.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class Expense(Base):
+    __tablename__ = "expenses"
+
+    id:           Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:     Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    category:     Mapped[str]       = mapped_column(String(50), nullable=False)  # marketing|shipping|software|salaries|warehouse|utilities|packaging|other
+    description:  Mapped[str]       = mapped_column(String(500), nullable=False, default="")
+    amount:       Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    recurring:    Mapped[bool]      = mapped_column(Boolean, nullable=False, default=False)
+    incurred_at:  Mapped[datetime]  = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at:   Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class FinancialReport(Base):
+    __tablename__ = "financial_reports"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    period:     Mapped[str]       = mapped_column(String(50), nullable=False, default="last_30_days")
+    summary:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    revenue:    Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    expenses:   Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    profit:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    margin:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)  # percent
+    kpis:       Mapped[dict]      = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class FinancialForecast(Base):
+    __tablename__ = "financial_forecasts"
+
+    id:                 Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:           Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    forecast_date:      Mapped[date]      = mapped_column(Date, nullable=False)
+    forecast_days:      Mapped[int]       = mapped_column(Integer, nullable=False, default=30)
+    cash_today:         Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    predicted_cash:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    predicted_revenue:  Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    predicted_expenses: Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    risk:               Mapped[str]       = mapped_column(String(20), nullable=False, default="low")  # low|medium|high|critical
+    confidence:         Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at:         Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class FinancialInsight(Base):
+    __tablename__ = "financial_insights"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    category:   Mapped[str]       = mapped_column(String(50), nullable=False, default="profitability")  # profitability|cashflow|expense|budget|risk
+    severity:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")
+    message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class BudgetRecommendation(Base):
+    __tablename__ = "budget_recommendations"
+
+    id:                 Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:           Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    department:         Mapped[str]       = mapped_column(String(100), nullable=False)  # marketing|inventory|operations|...
+    current_budget:     Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    recommended_budget: Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    reason:             Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at:         Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class RiskAssessment(Base):
+    __tablename__ = "risk_assessments"
+
+    id:             Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:       Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    risk:           Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    severity:       Mapped[str]       = mapped_column(String(20), nullable=False, default="low")  # low|medium|high|critical
+    related_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    recommendation: Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    resolved:       Mapped[bool]      = mapped_column(Boolean, nullable=False, default=False)
+    created_at:     Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -18,6 +18,7 @@ from typing import Any
 from agents.inventory.graph import run_inventory_agent
 from agents.marketing.graph import run_marketing_agent
 from agents.sales.graph import run_sales_agent
+from agents.finance.graph import run_finance_agent
 
 logger = logging.getLogger(__name__)
 
@@ -64,3 +65,10 @@ def run_marketing_agent_sync(brand_id: str, task: dict) -> dict[str, Any]:
     logger.info("Finished run_marketing_agent_sync for brand_id=%s", brand_id)
     return res
 
+
+def run_finance_agent_sync(brand_id: str, task: dict) -> dict[str, Any]:
+    """Celery-safe wrapper around the async Finance Agent graph."""
+    logger.info("Executing run_finance_agent_sync for brand_id=%s, task=%s", brand_id, task)
+    res = _run_async(run_finance_agent(brand_id, task))
+    logger.info("Finished run_finance_agent_sync for brand_id=%s", brand_id)
+    return res

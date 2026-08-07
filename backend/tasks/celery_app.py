@@ -39,4 +39,8 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.marketing_tasks.sync_content_performance_for_all_brands",
         "schedule": crontab(hour="*/6", minute=45),  # every 6 hours
     },
+    "daily-finance-review": {
+        "task": "tasks.finance_tasks.run_finance_agent_for_all_brands",
+        "schedule": crontab(hour=6, minute=45),  # 06:45 UTC — after sales & marketing, so it reads fresh insights/spend
+    },
 }

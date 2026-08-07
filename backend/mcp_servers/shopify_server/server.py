@@ -330,6 +330,44 @@ async def get_recent_orders(brand_id: str, hours: int = 24, paid_only: bool = Tr
         })
     return orders
 
+@mcp.tool()
+async def get_payment_summary(brand_id: str, days: int = 30) -> dict:
+    """
+    Aggregate order payment status over the last N days — counts and
+    amounts grouped by financial_status (paid, pending, refunded,
+    partially_refunded, voided). Coarser than get_recent_orders (which
+    returns full line items): built for "how much is actually collected
+    vs outstanding" reconciliation questions.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        days: Look-back window in days (default 30).
+
+    Used by: Finance Agent (cashflow/profit context, payment reconciliation).
+    """
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    try:
+        data = await _shopify_get(brand_id, "orders.json", {
+            "created_at_min": since,
+            "limit": 250,
+            "fields": "id,financial_status,total_price,created_at",
+        })
+    except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+
+    summary: dict[str, dict] = {}
+    for o in data.get("orders", []):
+        status = o.get("financial_status") or "unknown"
+        bucket = summary.setdefault(status, {"count": 0, "total": 0.0})
+        bucket["count"] += 1
+        bucket["total"] += float(o.get("total_price") or 0)
+
+    for bucket in summary.values():
+        bucket["total"] = round(bucket["total"], 2)
+
+    return {"period_days": days, "by_status": summary}
+
 
 @mcp.tool()
 async def get_returns(brand_id: str, days: int = 30) -> list[dict]:
