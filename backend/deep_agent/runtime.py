@@ -7,12 +7,10 @@ supervisor.py (chat/stream_chat) and conversations.py (message replay) can
 depend on this without importing each other — avoids circular imports.
 
 Note: no MCP clients are built here. The deep agent never talks to
-Shopify/Meta/Instagram directly — that only happens inside the real LangGraph
-pipeline (agents/supervisor.py), reached exclusively via start_agent_analysis
-(deep_agents/tools/pipeline_tools.py). The old SHOPIFY_MCP_URL / SOCIAL_MCP_URL
-/ TRENDS_MCP_URL / ADS_MCP_URL constants and the HuggingFaceEndpoint/
-ChatHuggingFace model experiment are gone — the latter was dead code anyway
-(shadowed by `from deep_agents.load_model import llm` before it was ever used).
+Shopify/Meta/Instagram/the open web directly — that only happens inside
+the real LangGraph pipelines (agents/{inventory,sales,marketing,finance,
+research}/graph.py), reached exclusively via start_agent_analysis
+(deep_agents/tools/pipeline_tools.py).
 """
 
 import asyncio
@@ -36,6 +34,7 @@ from agents.inventory.graph import inventory_agent
 from agents.sales.graph import sales_agent
 from agents.marketing.graph import marketing_agent
 from agents.finance.graph import finance_agent
+from agents.research.graph import research_agent
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -51,11 +50,12 @@ class FashionOSAgentState(DeepAgentState, total=False):
 
     DeepAgents' SubAgentMiddleware forwards the parent's full state (minus a
     few excluded keys) into each CompiledSubAgent run. The inventory/sales/
-    marketing graphs read `state["brand_id"]` (and `state.get("task")`) on
-    their very first node, so without `brand_id` in the supervisor's schema
-    delegation crashed with `KeyError: 'brand_id'` the instant the main agent
-    called a subagent — before any pipeline node ran. Declaring the key here
-    makes it flow: API -> supervisor state -> subagent state.
+    marketing/finance/research graphs read `state["brand_id"]` (and
+    `state.get("task")`) on their very first node, so without `brand_id` in
+    the supervisor's schema delegation crashed with `KeyError: 'brand_id'`
+    the instant the main agent called a subagent — before any pipeline node
+    ran. Declaring the key here makes it flow: API -> supervisor state ->
+    subagent state.
     """
     brand_id: str
     task: dict[str, Any]
@@ -88,10 +88,7 @@ async def get_checkpointer() -> AsyncRedisSaver:
         # No custom msgpack allowlist needed — every tool in the current
         # architecture (start_agent_analysis, check_agent_analysis_status,
         # get_db_tools()) returns plain dicts/lists, and LangChain message
-        # types already have first-class serde support. The old allowlist
-        # existed only for the now-deleted subagents' Pydantic response
-        # schemas (InventoryAnalysis, TrendAnalysis, etc.) flowing directly
-        # into message history.
+        # types already have first-class serde support.
         await _checkpointer.asetup()
         logger.info("AsyncRedisSaver checkpointer ready")
     return _checkpointer
@@ -124,7 +121,7 @@ async def build_supervisor(brand_id: str, brand_name: str):
         name          = f"fashionos-{brand_id}",
         model         = mistral,
         system_prompt = build_prompt(brand_id, brand_name),
-        subagents     = [inventory_agent, sales_agent, marketing_agent, finance_agent],
+        subagents     = [inventory_agent, sales_agent, marketing_agent, finance_agent, research_agent],
         backend       = backend,
         store         = store,
         memory        = ["/memories/AGENTS.md"],

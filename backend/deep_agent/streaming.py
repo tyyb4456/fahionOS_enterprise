@@ -29,17 +29,9 @@ PERSISTABLE_TOOLS: set[str] = {
     "inventory_agent",
     "sales_agent",
     "marketing_agent",
-    "start_agent_analysis",
-    "check_agent_analysis_status",
-    "get_pipeline_status",
-    "get_inventory_status",
-    "get_critical_skus",
-    "get_open_alerts",
-    "get_pending_approvals",
-    "get_sku_history",
-    "get_return_insights",
-    "get_content_queue",
-    "get_run_history",
+    "finance_agent",
+    "research_agent",
+    "supplier_agent",
 }
 
 # Sentinel label for persisted reasoning rows in chat_tool_results.

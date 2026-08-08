@@ -644,3 +644,79 @@ class RiskAssessment(Base):
     recommendation: Mapped[str]       = mapped_column(Text, nullable=False, default="")
     resolved:       Mapped[bool]      = mapped_column(Boolean, nullable=False, default=False)
     created_at:     Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Research Agent — external market intelligence. MarketTrend/ResearchInsight
+# are the routine, always-written-per-run analytical output (see
+# agents/research/graph.py::persist_node — same role as Inventory's
+# forecasts/alerts). ProductOpportunity/CompetitorAnalysis/PricingIntelligence
+# are written conditionally, mid-loop, by the agent's own dedicated tools
+# (agents/research/tools.py) — same role as Finance's Expense/
+# BudgetRecommendation/RiskAssessment.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MarketTrend(Base):
+    __tablename__ = "market_trends"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    trend:      Mapped[str]       = mapped_column(String(255), nullable=False)
+    category:   Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    growth_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    source:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    summary:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CompetitorAnalysis(Base):
+    __tablename__ = "competitor_analysis"
+
+    id:              Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:        Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    competitor:      Mapped[str]       = mapped_column(String(255), nullable=False)
+    products:        Mapped[list]      = mapped_column(JSON, nullable=False, default=list)
+    pricing_summary: Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    promotions:      Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    summary:         Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at:      Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ProductOpportunity(Base):
+    __tablename__ = "product_opportunities"
+
+    id:           Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:     Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    product:      Mapped[str]       = mapped_column(String(255), nullable=False)
+    market_score: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    competition:  Mapped[str]       = mapped_column(String(20), nullable=False, default="medium")  # low|medium|high
+    priority:     Mapped[str]       = mapped_column(String(20), nullable=False, default="medium")  # low|medium|high
+    reason:       Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    status:       Mapped[str]       = mapped_column(String(30), nullable=False, default="proposed")  # proposed|approved|rejected
+    created_at:   Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class PricingIntelligence(Base):
+    __tablename__ = "pricing_intelligence"
+
+    id:                 Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:           Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    product:            Mapped[str]       = mapped_column(String(255), nullable=False)
+    our_price:          Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    competitor_price:   Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    competitor_name:    Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    recommended_price:  Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    reason:             Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at:         Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ResearchInsight(Base):
+    __tablename__ = "research_insights"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    category:   Mapped[str]       = mapped_column(String(50), nullable=False, default="trend")  # trend|competitor|pricing|customer|keyword|forecast
+    severity:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")
+    message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

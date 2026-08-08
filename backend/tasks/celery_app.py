@@ -19,6 +19,14 @@ celery_app.autodiscover_tasks(["tasks"])
 logger.info("Celery app initialized with broker=%s", REDIS_URL)
 
 celery_app.conf.beat_schedule = {
+    "daily-research-trend-monitoring": {
+        "task": "tasks.research_tasks.run_research_agent_for_all_brands",
+        "schedule": crontab(hour=5, minute=30),  # 05:30 UTC — before the other four, so their runs can read fresh trends
+    },
+    "research-competitor-pulse": {
+        "task": "tasks.research_tasks.run_research_pulse_for_all_brands",
+        "schedule": crontab(hour="*/6", minute=0),  # every 6 hours — the "always-on analyst" behavior
+    },
     "daily-inventory-review": {
         "task": "tasks.inventory_tasks.run_inventory_agent_for_all_brands",
         "schedule": crontab(hour=6, minute=0),  # 06:00 UTC daily

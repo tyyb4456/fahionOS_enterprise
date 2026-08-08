@@ -6,6 +6,7 @@ import { uuidv4 } from './chat/utils'
 import MessageBubble from './chat/MessageBubble'
 import ConversationsSidebar from './chat/ConversationsSidebar'
 import ChatComposer from './chat/ChatComposer'
+import OfficeBoard from './chat/OfficeBoard'
 
 // const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const API_BASE = 'http://localhost:8080'
@@ -21,14 +22,14 @@ function getGreeting() {
 function AsteriskLogo({ size = 40, color = '#d4d4d8' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 4 L20 36" stroke={color} strokeWidth="3.2" strokeLinecap="round"/>
-      <path d="M4 20 L36 20" stroke={color} strokeWidth="3.2" strokeLinecap="round"/>
-      <path d="M8.69 8.69 L31.31 31.31" stroke={color} strokeWidth="3.2" strokeLinecap="round"/>
-      <path d="M31.31 8.69 L8.69 31.31" stroke={color} strokeWidth="3.2" strokeLinecap="round"/>
-      <path d="M5.36 12.32 L34.64 27.68" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5"/>
-      <path d="M34.64 12.32 L5.36 27.68" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5"/>
-      <path d="M12.32 5.36 L27.68 34.64" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5"/>
-      <path d="M27.68 5.36 L12.32 34.64" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5"/>
+      <path d="M20 4 L20 36" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M4 20 L36 20" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M8.69 8.69 L31.31 31.31" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M31.31 8.69 L8.69 31.31" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M5.36 12.32 L34.64 27.68" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
+      <path d="M34.64 12.32 L5.36 27.68" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
+      <path d="M12.32 5.36 L27.68 34.64" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
+      <path d="M27.68 5.36 L12.32 34.64" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
     </svg>
   )
 }
@@ -37,20 +38,20 @@ export default function Chat() {
   const { getToken } = useAuth()
   const { user } = useUser()
 
-  const [messages,    setMessages]    = useState([])
-  const [input,       setInput]       = useState('')
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [threadId,    setThreadId]    = useState(() => uuidv4())
+  const [threadId, setThreadId] = useState(() => uuidv4())
 
-  const [conversations,    setConversations]    = useState([])
-  const [convosLoading,    setConvosLoading]    = useState(true)
-  const [messagesLoading,  setMessagesLoading]  = useState(false)
+  const [conversations, setConversations] = useState([])
+  const [convosLoading, setConvosLoading] = useState(true)
+  const [messagesLoading, setMessagesLoading] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [isMobile,         setIsMobile]         = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
   const messagesEndRef = useRef(null)
-  const inputRef       = useRef(null)
-  const abortRef       = useRef(null)
+  const inputRef = useRef(null)
+  const abortRef = useRef(null)
 
   const greeting = getGreeting()
   const firstName = user?.firstName || 'there'
@@ -76,7 +77,7 @@ export default function Chat() {
   const fetchConversations = useCallback(async () => {
     try {
       const token = await getToken()
-      const res   = await fetch(`${API_BASE}/api/v1/conversations`, {
+      const res = await fetch(`${API_BASE}/api/v1/conversations`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) {
@@ -101,15 +102,15 @@ export default function Chat() {
     setMessagesLoading(true)
     try {
       const token = await getToken()
-      const res   = await fetch(`${API_BASE}/api/v1/conversations/${tid}/messages`, {
+      const res = await fetch(`${API_BASE}/api/v1/conversations/${tid}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) {
         const msgs = await res.json()
         setMessages(msgs.map((m, i) => ({
-          id:        i,
-          role:      m.role,
-          content:   m.content,
+          id: i,
+          role: m.role,
+          content: m.content,
           streaming: false,
           toolCalls: (m.tool_results || []).map((tr, j) => ({
             id: `${i}-${j}-${tr.name}`, name: tr.name, args: {}, status: 'done', data: tr.data,
@@ -126,7 +127,7 @@ export default function Chat() {
     try {
       const token = await getToken()
       await fetch(`${API_BASE}/api/v1/conversations/${tid}`, {
-        method:  'DELETE',
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
     } catch { /* ignore */ }
@@ -157,30 +158,30 @@ export default function Chat() {
     setIsStreaming(true)
 
     const userMsg = { id: Date.now(), role: 'user', content: trimmed }
-    const asstId  = Date.now() + 1
+    const asstId = Date.now() + 1
     setMessages(prev => [...prev,
       userMsg,
-      { id: asstId, role: 'assistant', content: '', toolCalls: [], reasoning: '', streaming: true },
+    { id: asstId, role: 'assistant', content: '', toolCalls: [], reasoning: '', streaming: true },
     ])
 
     try {
       const token = await getToken()
       if (abortRef.current) abortRef.current.abort()
-      const ctrl     = new AbortController()
+      const ctrl = new AbortController()
       abortRef.current = ctrl
 
       const res = await fetch(`${API_BASE}/api/v1/chat/stream`, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ message: trimmed, thread_id: threadId }),
-        signal:  ctrl.signal,
+        body: JSON.stringify({ message: trimmed, thread_id: threadId }),
+        signal: ctrl.signal,
       })
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      const reader  = res.body.getReader()
+      const reader = res.body.getReader()
       const decoder = new TextDecoder()
-      let   buffer  = ''
+      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -416,6 +417,12 @@ export default function Chat() {
                 </span>
               </div>
             </div>
+            
+            <OfficeBoard
+              toolCalls={messages[messages.length - 1]?.toolCalls || []}
+              isStreaming={isStreaming}
+              isMobile={isMobile}
+            />
 
             {/* Messages */}
             <div style={{

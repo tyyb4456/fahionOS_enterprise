@@ -1,7 +1,7 @@
 """
 FashionOS — FastAPI Application
 ================================
-Session 8: Approvals router mounted. notify-mcp startup check added.
+Session 9: Research Agent router mounted.
 """
 
 import asyncio
@@ -24,12 +24,13 @@ from api.routers.agents import (
     sales as sales_agent,
     marketing as marketing_agent,
     finance as finance_agent,
+    research as research_agent,
 )
 
 import sys
 sys.dont_write_bytecode = True
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 BRAND_NAME  = os.getenv("BRAND_NAME", "FashionOS Brand")
 REDIS_URL   = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -106,6 +107,7 @@ app.include_router(inventory_agent.router)
 app.include_router(sales_agent.router)
 app.include_router(marketing_agent.router)
 app.include_router(finance_agent.router)
+app.include_router(research_agent.router)
 
 
 @app.get("/health", tags=["ops"])
@@ -136,5 +138,6 @@ async def system_status():
             "sales":     "active",
             "marketing": "active",
             "finance":   "active",
+            "research":  "active",
         },
     }

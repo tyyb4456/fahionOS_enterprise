@@ -5,9 +5,10 @@ Sync-safe entry points for running agent graphs.
 
 Two consumers (see db/session.py docstring):
   1. Celery tasks (sync context) — call run_inventory_agent_sync() /
-     run_sales_agent_sync() / run_marketing_agent_sync()
+     run_sales_agent_sync() / run_marketing_agent_sync() / etc.
   2. FastAPI routes (async)      — call the agent's run_*_agent() directly
-                                    (agents/{inventory,sales,marketing}/graph.py)
+                                    (agents/{inventory,sales,marketing,
+                                    finance,research}/graph.py)
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from agents.inventory.graph import run_inventory_agent
 from agents.marketing.graph import run_marketing_agent
 from agents.sales.graph import run_sales_agent
 from agents.finance.graph import run_finance_agent
+from agents.research.graph import run_research_agent
 
 logger = logging.getLogger(__name__)
 
@@ -71,4 +73,12 @@ def run_finance_agent_sync(brand_id: str, task: dict) -> dict[str, Any]:
     logger.info("Executing run_finance_agent_sync for brand_id=%s, task=%s", brand_id, task)
     res = _run_async(run_finance_agent(brand_id, task))
     logger.info("Finished run_finance_agent_sync for brand_id=%s", brand_id)
+    return res
+
+
+def run_research_agent_sync(brand_id: str, task: dict) -> dict[str, Any]:
+    """Celery-safe wrapper around the async Research Agent graph."""
+    logger.info("Executing run_research_agent_sync for brand_id=%s, task=%s", brand_id, task)
+    res = _run_async(run_research_agent(brand_id, task))
+    logger.info("Finished run_research_agent_sync for brand_id=%s", brand_id)
     return res

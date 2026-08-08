@@ -1,18 +1,20 @@
 """
 Policy Document Upload — brand owner uploads Inventory Policy.pdf, Sales
-SOP.pdf, Pricing Strategy.pdf, Brand Voice.pdf, etc.; this parses, chunks,
-and indexes them into Chroma so an agent's retrieve_policy tool can find
-them.
+SOP.pdf, Pricing Strategy.pdf, Brand Voice.pdf, Brand Strategy.pdf, etc.;
+this parses, chunks, and indexes them into Chroma so an agent's
+retrieve_policy tool can find them.
 
-Routed per agent so Inventory, Sales, and Marketing policy documents (and
-their Chroma collections — see agents/inventory/memory.py vs
-agents/sales/memory.py vs agents/marketing/memory.py) never mix:
+Routed per agent so Inventory, Sales, Marketing, Finance, and Research
+policy documents (and their Chroma collections — see
+agents/inventory/memory.py vs agents/sales/memory.py vs
+agents/marketing/memory.py vs agents/finance/memory.py vs
+agents/research/memory.py) never mix:
 
 POST   /api/v1/brands/me/policies/{agent}         → upload + index a document
 GET    /api/v1/brands/me/policies/{agent}          → list uploaded documents
 DELETE /api/v1/brands/me/policies/{agent}/{id}     → remove a document + its chunks
 
-agent: "inventory" | "sales" | "marketing"
+agent: "inventory" | "sales" | "marketing" | "finance" | "research"
 """
 import logging
 import uuid
@@ -34,7 +36,7 @@ router = APIRouter(prefix="/api/v1/brands/me/policies", tags=["policy-documents"
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB
 
-AgentName = Literal["inventory", "sales", "marketing", "finance"]
+AgentName = Literal["inventory", "sales", "marketing", "finance", "research"]
 
 
 def _rag_module(agent: AgentName):
@@ -46,6 +48,9 @@ def _rag_module(agent: AgentName):
         return rag
     if agent == "finance":
         from agents.finance import memory as rag
+        return rag
+    if agent == "research":
+        from agents.research import memory as rag
         return rag
     from agents.inventory import memory as rag
     return rag
