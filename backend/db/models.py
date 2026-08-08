@@ -237,6 +237,8 @@ class Supplier(Base):
     lead_time_days:    Mapped[int]       = mapped_column(Integer, nullable=False, default=14)
     minimum_order_qty: Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
     reliability_score: Mapped[float]     = mapped_column(Float, nullable=False, default=0.8)  # 0-1
+    # Supplier Agent from post-delivery quality checks (update_supplier_score).
+    quality_score:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.8)  # 0-1
     notes:             Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at:        Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -261,6 +263,12 @@ class PurchaseOrder(Base):
     ordered_quantity:  Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
     expected_delivery: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     status:            Mapped[str]       = mapped_column(String(50), nullable=False, default="pending")  # pending|shipped|received|cancelled
+    unit_cost:         Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_cost:        Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    payment_terms:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Set once update_shipment_status marks the shipment "delivered" — the
+    # basis for the Supplier Agent's on-time-delivery vendor scoring.
+    actual_delivery:   Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at:        Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -720,3 +728,76 @@ class ResearchInsight(Base):
     message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
     confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
     created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Supplier Agent — procurement intelligence. Supplier/PurchaseOrder are
+# SHARED tables with the Inventory Agent (same "shared Postgres, no
+# duplicate tables" pattern Sales already uses against Inventory's own
+# InventoryAlert) — Inventory can still place POs itself; Supplier Agent
+# writes into the same tables plus owns these four outright.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SupplierQuote(Base):
+    __tablename__ = "supplier_quotes"
+
+    id:             Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:       Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    supplier_id:    Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False, index=True)
+    sku:            Mapped[str]       = mapped_column(String(255), nullable=False, index=True)
+    quantity:       Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    unit_price:     Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    moq:            Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
+    lead_time_days: Mapped[int]       = mapped_column(Integer, nullable=False, default=14)
+    valid_until:    Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # estimated = deterministic placeholder from request_quotes (no live
+    # supplier-portal/RFQ-response integration yet — see
+    # agents/supplier/tools.py); received|accepted|rejected = a real
+    # decision logged once one exists.
+    status:         Mapped[str]       = mapped_column(String(20), nullable=False, default="estimated")
+    created_at:     Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class NegotiationRecord(Base):
+    __tablename__ = "negotiation_records"
+
+    id:             Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:       Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    supplier_id:    Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False, index=True)
+    sku:            Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    initial_offer:  Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    counter_offer:  Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    final_price:    Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    result:         Mapped[str]       = mapped_column(String(20), nullable=False, default="ongoing")  # ongoing|accepted|rejected
+    notes:          Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at:     Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ShipmentTracking(Base):
+    __tablename__ = "shipment_tracking"
+
+    id:                Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:          Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    purchase_order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("purchase_orders.id"), nullable=False, index=True)
+    carrier:           Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tracking_number:   Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    status:            Mapped[str]       = mapped_column(String(30), nullable=False, default="manufacturing")
+    # manufacturing|shipped|in_transit|customs|delivered|delayed
+    current_location:  Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    estimated_arrival: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    last_updated:      Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at:        Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SupplierInsight(Base):
+    __tablename__ = "supplier_insights"
+
+    id:          Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:    Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True)
+    category:    Mapped[str]       = mapped_column(String(50), nullable=False, default="performance")
+    # pricing|quality|reliability|risk|opportunity|performance
+    severity:    Mapped[str]       = mapped_column(String(20), nullable=False, default="low")
+    message:     Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    confidence:  Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at:  Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

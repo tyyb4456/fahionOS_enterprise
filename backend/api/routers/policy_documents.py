@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api/v1/brands/me/policies", tags=["policy-documents"
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB
 
-AgentName = Literal["inventory", "sales", "marketing", "finance", "research"]
+AgentName = Literal["inventory", "sales", "marketing", "finance", "research", "supplier"]
 
 
 def _rag_module(agent: AgentName):
@@ -51,6 +51,9 @@ def _rag_module(agent: AgentName):
         return rag
     if agent == "research":
         from agents.research import memory as rag
+        return rag
+    if agent == "supplier":
+        from agents.supplier import memory as rag
         return rag
     from agents.inventory import memory as rag
     return rag

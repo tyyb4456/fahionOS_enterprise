@@ -31,6 +31,10 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.inventory_tasks.run_inventory_agent_for_all_brands",
         "schedule": crontab(hour=6, minute=0),  # 06:00 UTC daily
     },
+    "daily-supplier-procurement-review": {
+        "task": "tasks.supplier_tasks.run_supplier_agent_for_all_brands",
+        "schedule": crontab(hour=6, minute=10),  # 06:10 UTC — after inventory, so it can read fresh pending_approval reorder recommendations
+    },
     "daily-sales-review": {
         "task": "tasks.sales_tasks.run_sales_agent_for_all_brands",
         "schedule": crontab(hour=6, minute=15),  # 06:15 UTC — right after inventory

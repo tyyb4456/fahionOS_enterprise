@@ -25,6 +25,7 @@ from api.routers.agents import (
     marketing as marketing_agent,
     finance as finance_agent,
     research as research_agent,
+    supplier as supplier_agent,
 )
 
 import sys
@@ -108,6 +109,7 @@ app.include_router(sales_agent.router)
 app.include_router(marketing_agent.router)
 app.include_router(finance_agent.router)
 app.include_router(research_agent.router)
+app.include_router(supplier_agent.router)
 
 
 @app.get("/health", tags=["ops"])
@@ -139,5 +141,6 @@ async def system_status():
             "marketing": "active",
             "finance":   "active",
             "research":  "active",
+            "supplier":  "active",
         },
     }
