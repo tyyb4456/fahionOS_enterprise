@@ -22,13 +22,12 @@ from typing import Any
 
 from deepagents import DeepAgentState, FilesystemPermission, create_deep_agent
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend, FilesystemBackend
-from dotenv import load_dotenv
 from langgraph.store.redis.aio import AsyncRedisStore
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langchain_mistralai import ChatMistralAI
 
 from deep_agent.memory import ensure_brand_seeded
-from deep_agent.prompts import build_prompt
-from deep_agent.load_model import mistral
+from deep_agent.prompt import build_prompt
 
 from agents.inventory.graph import inventory_agent
 from agents.sales.graph import sales_agent
@@ -38,11 +37,19 @@ from agents.research.graph import research_agent
 from agents.supplier.graph import supplier_agent
 
 logger = logging.getLogger(__name__)
+
+from dotenv import load_dotenv
 load_dotenv()
 
 REDIS_URL  = os.getenv("REDIS_URL", "redis://localhost:6379")
 BASE_DIR   = Path(__file__).parent.resolve()
 SKILLS_DIR = BASE_DIR / "skills"
+
+mistral = ChatMistralAI(
+    model="mistral-medium-3-5",
+    temperature=0,
+    model_kwargs={"reasoning_effort": "high"},
+)
 
 
 class FashionOSAgentState(DeepAgentState, total=False):

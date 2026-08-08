@@ -3,6 +3,40 @@ import { Package, TrendingUp, Tag, Megaphone, FileText } from 'lucide-react'
 export const GOLD     = 'var(--gold)'
 export const GOLD_DIM  = 'rgba(var(--gold-rgb), 0.14)'
 
+// ── Per-streaming-source label/colour — used by the agent activity strip and
+// the subagent output cards. Keyed by the `source` field the backend labels
+// messages with ("inventory_agent", "sales_agent", ..., "main agent").
+const SOURCE_COLORS = {
+  inventory: '#22c55e',
+  sales:     '#60a5fa',
+  marketing: '#f97316',
+  finance:   '#facc15',
+  research:  '#a855f7',
+  supplier:  '#38bdf8',
+}
+
+export const SOURCE_META = {
+  inventory_agent: { label: 'Inventory', color: SOURCE_COLORS.inventory },
+  sales_agent:     { label: 'Sales',     color: SOURCE_COLORS.sales },
+  marketing_agent: { label: 'Marketing', color: SOURCE_COLORS.marketing },
+  finance_agent:   { label: 'Finance',   color: SOURCE_COLORS.finance },
+  research_agent:  { label: 'Research',  color: SOURCE_COLORS.research },
+  supplier_agent:  { label: 'Supplier',  color: SOURCE_COLORS.supplier },
+  'main agent':    { label: 'Supervisor', color: GOLD },
+}
+
+export function sourceMeta(source) {
+  if (SOURCE_META[source]) return SOURCE_META[source]
+  if (source && source.includes(' > ')) {
+    const first = source.split(' > ')[0]
+    if (SOURCE_META[first]) return SOURCE_META[first]
+    if (SOURCE_COLORS[first]) return { label: first, color: SOURCE_COLORS[first] }
+    return { label: first, color: '#94a3b8' }
+  }
+  if (source && SOURCE_COLORS[source]) return { label: source, color: SOURCE_COLORS[source] }
+  return { label: source || 'agent', color: '#94a3b8' }
+}
+
 // ── Urgency / level colour helpers ─────────────────────────────────────────────
 export const URGENCY_COLOR = {
   critical: '#ef4444',

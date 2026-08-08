@@ -1,8 +1,9 @@
-import { Bot, Loader2 } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import { GOLD } from './constants'
 import ReasoningBlock from './ReasoningBlock'
 import ToolCallCard from './ToolCallCard'
 import MarkdownContent from './MarkdownContent'
+import SubagentOutput from './SubagentOutput'
 
 export default function MessageBubble({ msg }) {
   const isUser = msg.role === 'user'
@@ -56,6 +57,15 @@ export default function MessageBubble({ msg }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
           {msg.toolCalls.map(call => <ToolCallCard key={call.id} call={call} />)}
         </div>
+      )}
+
+      {/* Subagent streamed output */}
+      {!isUser && msg.subStreams && Object.keys(msg.subStreams).length > 0 && (
+        <SubagentOutput
+          streams={msg.subStreams}
+          activeSource={msg.steps?.[msg.steps.length - 1]?.source}
+          streaming={msg.streaming}
+        />
       )}
 
       {/* Message bubble */}

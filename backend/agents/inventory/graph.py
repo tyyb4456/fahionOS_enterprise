@@ -37,9 +37,11 @@ from typing import Any
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, StateGraph
 from deepagents import create_deep_agent
+from langchain.agents import create_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
 from deepagents import CompiledSubAgent
+from langgraph.config import get_stream_writer
 
 from db import crud_inventory as crud
 from db.session import AsyncSessionLocal
@@ -77,7 +79,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
 
     model = init_chat_model("google_genai:gemini-3.6-flash")
 
-    agent = create_deep_agent(model, tools)
+    agent = create_agent(model, tools)
 
     messages = state.get("messages", [])
     if messages:

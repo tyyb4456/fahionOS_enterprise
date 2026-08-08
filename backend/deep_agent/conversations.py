@@ -118,7 +118,17 @@ async def _extract_messages(raw_messages: list) -> list[dict]:
             "role":    "user" if msg_type == "human" else "assistant",
             "content": str(content).strip(),
         })
-    return result
+
+    # Collapse consecutive AI messages to the last one in each run. A single
+    # user turn produces intermediate AI(tool-call) messages plus the final
+    # answer; history should show only the final answer per turn so reload
+    # matches the live experience (one bubble per user message).
+    collapsed: list[dict] = []
+    for i, m in enumerate(result):
+        if m["role"] == "assistant" and i + 1 < len(result) and result[i + 1]["role"] == "assistant":
+            continue
+        collapsed.append(m)
+    return collapsed
 
 
 async def get_thread_messages(brand_id: str, brand_name: str, thread_id: str) -> list[dict]:

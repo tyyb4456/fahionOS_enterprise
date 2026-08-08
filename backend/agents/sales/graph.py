@@ -40,6 +40,7 @@ load_dotenv()
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, StateGraph
 from deepagents import CompiledSubAgent, create_deep_agent
+from langchain.agents import create_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
 
@@ -85,7 +86,7 @@ async def reasoning_node(state: SalesPipelineState) -> dict:
         model_kwargs={"reasoning_effort": "high"},
     )
 
-    agent = create_deep_agent(model, tools)
+    agent = create_agent(model, tools)
 
     messages = state.get("messages", [])
     if messages:

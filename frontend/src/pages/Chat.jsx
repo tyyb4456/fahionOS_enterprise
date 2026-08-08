@@ -6,7 +6,8 @@ import { uuidv4 } from './chat/utils'
 import MessageBubble from './chat/MessageBubble'
 import ConversationsSidebar from './chat/ConversationsSidebar'
 import ChatComposer from './chat/ChatComposer'
-import OfficeBoard from './chat/OfficeBoard'
+import AgentActivity from './chat/AgentActivity'
+// import OfficeBoard from './chat/OfficeBoard'
 
 // const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const API_BASE = 'http://localhost:8080'
@@ -107,16 +108,24 @@ export default function Chat() {
       })
       if (res.ok) {
         const msgs = await res.json()
-        setMessages(msgs.map((m, i) => ({
-          id: i,
-          role: m.role,
-          content: m.content,
-          streaming: false,
-          toolCalls: (m.tool_results || []).map((tr, j) => ({
-            id: `${i}-${j}-${tr.name}`, name: tr.name, args: {}, status: 'done', data: tr.data,
-          })),
-          reasoning: m.reasoning || '',
-        })))
+        setMessages(msgs.map((m, i) => {
+          const subStreams = {}
+          for (const so of (m.sub_outputs || [])) {
+            subStreams[so.source] = { reasoning: so.reasoning || '', content: so.content || '' }
+          }
+          return {
+            id: i,
+            role: m.role,
+            content: m.content,
+            streaming: false,
+            toolCalls: (m.tool_results || []).map((tr, j) => ({
+              id: `${i}-${j}-${tr.name}`, name: tr.name, args: {}, status: 'done', data: tr.data,
+            })),
+            reasoning: m.reasoning || '',
+            steps: [],
+            subStreams,
+          }
+        }))
       }
     } catch { /* network / dev fallback */ }
     finally { setMessagesLoading(false) }
@@ -161,7 +170,7 @@ export default function Chat() {
     const asstId = Date.now() + 1
     setMessages(prev => [...prev,
       userMsg,
-    { id: asstId, role: 'assistant', content: '', toolCalls: [], reasoning: '', streaming: true },
+    { id: asstId, role: 'assistant', content: '', toolCalls: [], reasoning: '', steps: [], subStreams: {}, streaming: true },
     ])
 
     try {
@@ -199,16 +208,62 @@ export default function Chat() {
           let evt
           try { evt = JSON.parse(raw) } catch { continue }
 
+          // The supervisor's own tokens land in the message bubble; subagent
+          // streams (source !== "main agent") are collected per-source so the
+          // subagent output cards can show them live.
+          const isMainAgent = !evt.source || evt.source === 'main agent'
+
           switch (evt.type) {
-            case 'token':
+            case 'step':
               setMessages(prev => prev.map(m =>
-                m.id === asstId ? { ...m, content: m.content + evt.content } : m
+                m.id === asstId
+                  ? { ...m, steps: [...(m.steps || []), { source: evt.source || 'main agent', node: evt.node || '' }] }
+                  : m
               ))
               break
-            case 'reasoning':
-              setMessages(prev => prev.map(m =>
-                m.id === asstId ? { ...m, reasoning: (m.reasoning || '') + evt.content } : m
-              ))
+            case 'token': {
+              if (isMainAgent) {
+                setMessages(prev => prev.map(m =>
+                  m.id === asstId ? { ...m, content: m.content + evt.content } : m
+                ))
+              } else {
+                const src = (evt.source || 'subagent').split(' > ')[0]
+                setMessages(prev => prev.map(m =>
+                  m.id === asstId
+                    ? {
+                        ...m,
+                        subStreams: {
+                          ...m.subStreams,
+                          [src]: { ...(m.subStreams[src] || {}), content: (m.subStreams[src]?.content || '') + evt.content },
+                        },
+                      }
+                    : m
+                ))
+              }
+              break
+            }
+            case 'reasoning': {
+              if (isMainAgent) {
+                setMessages(prev => prev.map(m =>
+                  m.id === asstId ? { ...m, reasoning: (m.reasoning || '') + evt.content } : m
+                ))
+              } else {
+                const src = (evt.source || 'subagent').split(' > ')[0]
+                setMessages(prev => prev.map(m =>
+                  m.id === asstId
+                    ? {
+                        ...m,
+                        subStreams: {
+                          ...m.subStreams,
+                          [src]: { ...(m.subStreams[src] || {}), reasoning: (m.subStreams[src]?.reasoning || '') + evt.content },
+                        },
+                      }
+                    : m
+                ))
+              }
+              break
+            }
+            case 'custom':
               break
             case 'tool_call':
               setMessages(prev => prev.map(m =>
@@ -418,11 +473,18 @@ export default function Chat() {
               </div>
             </div>
             
-            <OfficeBoard
+            {/* <OfficeBoard
               toolCalls={messages[messages.length - 1]?.toolCalls || []}
               isStreaming={isStreaming}
               isMobile={isMobile}
-            />
+            /> */}
+
+            {(() => {
+              const lastMsg = messages[messages.length - 1]
+              return lastMsg?.role === 'assistant' && lastMsg.streaming && lastMsg.steps?.length > 0
+                ? <AgentActivity steps={lastMsg.steps} streaming={lastMsg.streaming} isMobile={isMobile} />
+                : null
+            })()}
 
             {/* Messages */}
             <div style={{

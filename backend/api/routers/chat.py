@@ -65,10 +65,17 @@ class ToolResultOut(BaseModel):
     status:  str = "done"
 
 
+class SubOutputOut(BaseModel):
+    source:    str
+    content:   str = ""
+    reasoning: str = ""
+
+
 class MessageOut(BaseModel):
     role:         str   # "user" | "assistant"
     content:      str
     tool_results: list[ToolResultOut] = []
+    sub_outputs:  list[SubOutputOut] = []
     reasoning:    str = ""
 
 
@@ -176,7 +183,7 @@ async def get_conversation_messages(
 
     from db.models import ChatToolResult
     from deep_agent.supervisor import get_thread_messages
-    from deep_agent.streaming import REASONING_SENTINEL
+    from deep_agent.streaming import REASONING_SENTINEL, SUBAGENT_SENTINEL
 
     try:
         # Checkpoint (Redis) and tool-results (Postgres) are independent —
@@ -198,12 +205,23 @@ async def get_conversation_messages(
 
         # Group by turn_index (0-based index of assistant messages). The
         # reasoning sentinel row is pulled out separately — it's persisted
-        # text for the ReasoningBlock, not a tool-result card.
+        # text for the ReasoningBlock, not a tool-result card. Subagent output
+        # rows (SUBAGENT_SENTINEL) become per-source streamed content cards.
         tool_results_by_turn: dict[int, list[ToolResultOut]] = defaultdict(list)
-        reasoning_by_turn: dict[int, str] = {}
+        sub_outputs_by_turn:   dict[int, list[SubOutputOut]] = defaultdict(list)
+        reasoning_by_turn:     dict[int, str] = {}
         for row in rows:
             if row.label == REASONING_SENTINEL:
                 reasoning_by_turn[row.turn_index] = row.summary or ""
+                continue
+            if row.label.startswith(SUBAGENT_SENTINEL + ":"):
+                source = row.label[len(SUBAGENT_SENTINEL) + 1:]
+                data   = row.data if isinstance(row.data, dict) else {}
+                sub_outputs_by_turn[row.turn_index].append(SubOutputOut(
+                    source    = source,
+                    content   = data.get("content", "") or "",
+                    reasoning = data.get("reasoning", "") or "",
+                ))
                 continue
             tool_results_by_turn[row.turn_index].append(ToolResultOut(
                 name    = row.label,
@@ -218,10 +236,11 @@ async def get_conversation_messages(
         for m in msgs:
             if m.get("role") == "assistant":
                 enriched.append(MessageOut(
-                    role      = m["role"],
-                    content   = m.get("content", ""),
-                    tool_results = tool_results_by_turn.get(asst_idx, []),
-                    reasoning = reasoning_by_turn.get(asst_idx, ""),
+                    role          = m["role"],
+                    content       = m.get("content", ""),
+                    tool_results  = tool_results_by_turn.get(asst_idx, []),
+                    sub_outputs   = sub_outputs_by_turn.get(asst_idx, []),
+                    reasoning     = reasoning_by_turn.get(asst_idx, ""),
                 ))
                 asst_idx += 1
             else:
