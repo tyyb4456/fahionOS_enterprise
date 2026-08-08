@@ -251,14 +251,32 @@ async def stream_chat(
             for tc in (getattr(msg_chunk, "tool_calls", []) or []):
                 tc_name = tc.get("name")
                 tc_id   = tc.get("id", "")
-                if tc_name and tc_id:
-                    tc_id_to_tool[tc_id] = tc_name
-                    yield {
-                        "type": "tool_call",
-                        "name": tc_name,
-                        "id":   tc_id,
-                        "args": tc.get("args") or {},
-                    }
+                if not tc_name or not tc_id:
+                    continue
+
+                # The SubAgentMiddleware exposes a single "task" tool.
+                # Remap its name to the actual subagent_type so the
+                # frontend OfficeBoard can animate the correct agent avatar.
+                tc_args = tc.get("args") or {}
+                if isinstance(tc_args, str):
+                    try:
+                        tc_args = json.loads(tc_args)
+                    except (json.JSONDecodeError, TypeError):
+                        tc_args = {}
+
+                display_name = tc_name
+                if tc_name == "task" and isinstance(tc_args, dict):
+                    sub = tc_args.get("subagent_type", "")
+                    if sub:
+                        display_name = sub
+
+                tc_id_to_tool[tc_id] = display_name
+                yield {
+                    "type": "tool_call",
+                    "name": display_name,
+                    "id":   tc_id,
+                    "args": tc_args,
+                }
 
             # ── Intercept ToolMessage results ───────────────────────────────
             # BUG FIX: this must be a SIBLING check, not nested inside the
