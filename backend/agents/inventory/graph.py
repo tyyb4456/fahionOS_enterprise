@@ -36,13 +36,12 @@ from typing import Any
 
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, StateGraph
-from deepagents import create_deep_agent
+from deepagents import CompiledSubAgent, create_deep_agent
 from langchain.agents import create_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
-from deepagents import CompiledSubAgent
-from langgraph.config import get_stream_writer
 
+from agents.common.progress import AnnounceToolCalls, progress as emit_progress
 from db import crud_inventory as crud
 from db.session import AsyncSessionLocal
 from .state import InventoryPipelineState
@@ -58,20 +57,24 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Nodes
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def build_context_node(state: InventoryPipelineState) -> dict:
     logger.info("[InventoryAgent] Building business context for brand_id=%s", state["brand_id"])
+    emit_progress("build_context", "started", "Building business context")
     async with AsyncSessionLocal() as session:
         context = await crud.get_business_context(session, state["brand_id"])
+    emit_progress("build_context", "done", "Business context ready")
     return {"context": context}
 
 
 async def reasoning_node(state: InventoryPipelineState) -> dict:
     brand_id = state["brand_id"]
     logger.info("[InventoryAgent] Running reasoning node for brand_id=%s", brand_id)
+    emit_progress("reason", "started", "Running analysis — calling tools as needed")
 
     shopify_tools = scope_tools_to_brand(await get_shopify_tools(), brand_id)
     internal_tools = build_internal_tools(brand_id)
@@ -79,7 +82,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
 
     model = init_chat_model("google_genai:gemini-3.6-flash")
 
-    agent = create_agent(model, tools)
+    agent = create_agent(model, tools, middleware=[AnnounceToolCalls()])
 
     messages = state.get("messages", [])
     if messages:
@@ -102,6 +105,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
         for call in (getattr(message, "tool_calls", None) or [])
     })
 
+    emit_progress("reason", "done", "Analysis complete")
     logger.info("[InventoryAgent] Reasoning node finished for brand_id=%s. Tools used: %s", brand_id, tools_used)
     return {"messages": result["messages"], "tools_used": tools_used}
 
@@ -109,6 +113,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
 async def extract_decision_node(state: InventoryPipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
     logger.info("[InventoryAgent] Extracting structured decision for brand_id=%s", state["brand_id"])
+    emit_progress("extract_decision", "started", "Extracting structured decision")
     model = init_chat_model("google_genai:gemini-3.6-flash").with_structured_output(AgentDecision)
 
     transcript = "\n".join(
@@ -124,6 +129,7 @@ async def extract_decision_node(state: InventoryPipelineState) -> dict:
     )
 
     logger.info("[InventoryAgent] Decision extracted for brand_id=%s: summary=%s", state["brand_id"], decision.summary[:100] if decision.summary else "")
+    emit_progress("extract_decision", "done", "Decision extracted")
     return {
         "forecasts": [f.model_dump() for f in decision.forecasts],
         "recommendations": [r.model_dump() for r in decision.recommendations],
@@ -142,6 +148,7 @@ async def persist_node(state: InventoryPipelineState) -> dict:
     alerts = state.get("alerts", [])
 
     logger.info("[InventoryAgent] Persisting outputs for brand_id=%s (forecasts=%d, recs=%d, alerts=%d)", brand_id, len(forecasts), len(recommendations), len(alerts))
+    emit_progress("persist", "started", "Persisting results")
     async with AsyncSessionLocal() as session:
         await crud.save_forecasts(session, brand_id, forecasts)
         await crud.save_recommendations(session, brand_id, recommendations)
@@ -158,6 +165,7 @@ async def persist_node(state: InventoryPipelineState) -> dict:
     if alerts:
         db_updates.append(f"inventory_alerts: +{len(alerts)}")
 
+    emit_progress("persist", "done", "Results saved")
     return {"status": "completed", "db_updates": db_updates}
 
 

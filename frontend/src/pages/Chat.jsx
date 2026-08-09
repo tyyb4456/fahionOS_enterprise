@@ -263,8 +263,37 @@ export default function Chat() {
               }
               break
             }
-            case 'custom':
+            case 'custom': {
+              // Subagent progress: {"type":"progress","stage":...,"status":...}
+              // and {"type":"tool","name":...,"status":...}. Tracked per-source so
+              // the subagent card can show a live checklist while streaming.
+              const src = (evt.source || 'subagent').split(' > ')[0]
+              const data = evt.data
+              if (src === 'main agent' || !data || typeof data !== 'object' || !data.type) break
+              if (data.type !== 'progress' && data.type !== 'tool') break
+
+              const key = data.type === 'tool' ? `tool:${data.name || 'tool'}` : `stage:${data.stage || 'step'}`
+              const text = data.type === 'tool'
+                ? (data.name || 'tool')
+                : (data.message || data.stage || 'step')
+
+              setMessages(prev => prev.map(m => {
+                if (m.id !== asstId) return m
+                const progress = (m.subStreams?.[src]?.progress) || []
+                const idx = progress.findIndex(p => p.key === key)
+                const next = idx >= 0
+                  ? progress.map((p, i) => i === idx ? { ...p, status: data.status || 'started' } : p)
+                  : [...progress, { key, text, status: data.status || 'started' }]
+                return {
+                  ...m,
+                  subStreams: {
+                    ...m.subStreams,
+                    [src]: { ...(m.subStreams[src] || {}), progress: next },
+                  },
+                }
+              }))
               break
+            }
             case 'tool_call':
               setMessages(prev => prev.map(m =>
                 m.id === asstId

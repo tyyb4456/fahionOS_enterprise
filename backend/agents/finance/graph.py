@@ -46,6 +46,7 @@ from langchain.agents import create_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
 
+from agents.common.progress import AnnounceToolCalls, progress as emit_progress
 from agents.common.tool_scoping import scope_tools_to_brand
 from db import crud_finance as crud
 from db.session import AsyncSessionLocal
@@ -70,15 +71,18 @@ def _time_range_from_task(task_obj: Any) -> str:
 async def build_context_node(state: FinancePipelineState) -> dict:
     brand_id = state["brand_id"]
     logger.info("[FinanceAgent] Building business context for brand_id=%s", brand_id)
+    emit_progress("build_context", "started", "Building business context")
     time_range = _time_range_from_task(state.get("task", {}))
     async with AsyncSessionLocal() as session:
         context = await crud.get_business_context(session, brand_id, time_range=time_range)
+    emit_progress("build_context", "done", "Business context ready")
     return {"context": context}
 
 
 async def reasoning_node(state: FinancePipelineState) -> dict:
     brand_id = state["brand_id"]
     logger.info("[FinanceAgent] Running reasoning node for brand_id=%s", brand_id)
+    emit_progress("reason", "started", "Running analysis — calling tools as needed")
 
     live_tools = scope_tools_to_brand(await get_finance_tools(), brand_id)
     internal_tools = build_internal_tools(brand_id)
@@ -90,7 +94,7 @@ async def reasoning_node(state: FinancePipelineState) -> dict:
         model_kwargs={"reasoning_effort": "high"},
     )
 
-    agent = create_agent(model, tools)
+    agent = create_agent(model, tools, middleware=[AnnounceToolCalls()])
 
     messages = state.get("messages", [])
     if messages:
@@ -113,6 +117,7 @@ async def reasoning_node(state: FinancePipelineState) -> dict:
         for call in (getattr(message, "tool_calls", None) or [])
     })
 
+    emit_progress("reason", "done", "Analysis complete")
     logger.info("[FinanceAgent] Reasoning node finished for brand_id=%s. Tools used: %s", brand_id, tools_used)
     return {"messages": result["messages"], "tools_used": tools_used}
 
@@ -120,6 +125,7 @@ async def reasoning_node(state: FinancePipelineState) -> dict:
 async def extract_decision_node(state: FinancePipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
     logger.info("[FinanceAgent] Extracting structured decision for brand_id=%s", state["brand_id"])
+    emit_progress("extract_decision", "started", "Extracting structured decision")
     model = init_chat_model("google_genai:gemini-3.6-flash").with_structured_output(FinancialDecision)
 
     transcript = "\n".join(
@@ -135,6 +141,7 @@ async def extract_decision_node(state: FinancePipelineState) -> dict:
     )
 
     logger.info("[FinanceAgent] Decision extracted for brand_id=%s: summary=%s", state["brand_id"], decision.summary[:100] if decision.summary else "")
+    emit_progress("extract_decision", "done", "Decision extracted")
     return {
         "profit_report": decision.profit_report.model_dump(),
         "cashflow_forecast": decision.cashflow_forecast.model_dump() if decision.cashflow_forecast else None,
@@ -157,6 +164,7 @@ async def persist_node(state: FinancePipelineState) -> dict:
     summary = state.get("summary", "")
 
     logger.info("[FinanceAgent] Persisting outputs for brand_id=%s (insights=%d, has_forecast=%s)", brand_id, len(insights), bool(cashflow_forecast))
+    emit_progress("persist", "started", "Persisting results")
     async with AsyncSessionLocal() as session:
         await crud.save_financial_report(
             session, brand_id, period, summary,
@@ -178,6 +186,7 @@ async def persist_node(state: FinancePipelineState) -> dict:
     if insights:
         db_updates.append(f"financial_insights: +{len(insights)}")
 
+    emit_progress("persist", "done", "Results saved")
     return {"status": "completed", "db_updates": db_updates}
 
 

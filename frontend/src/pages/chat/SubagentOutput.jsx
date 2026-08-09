@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, CheckCircle2, ChevronUp, ChevronDown } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, ChevronUp, ChevronDown } from 'lucide-react'
 import { sourceMeta } from './constants'
 import MarkdownContent from './MarkdownContent'
 import SmartContent from './SmartContent'
@@ -29,6 +29,51 @@ function Reasoning({ text, color }) {
           <MarkdownContent text={text} color="var(--text-muted)" fontSize="0.66rem" italic />
         </div>
       )}
+    </div>
+  )
+}
+
+function ProgressIcon({ status, color }) {
+  if (status === 'done') return <CheckCircle2 size={10} color="#22c55e" style={{ flexShrink: 0 }} />
+  if (status === 'error') return <XCircle size={10} color="#ef4444" style={{ flexShrink: 0 }} />
+  return <Loader2 size={10} color={color} style={{ animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
+}
+
+function ProgressList({ items, color }) {
+  if (!items || items.length === 0) return null
+  return (
+    <div style={{ margin: '0 0 8px' }}>
+      {items.map(p => (
+        <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+          <ProgressIcon status={p.status} color={color} />
+          <span style={{
+            fontSize: '0.62rem', fontFamily: "'Knewave', cursive", letterSpacing: '0.04em',
+            color: p.status === 'done' ? 'var(--text-muted)' : 'var(--text-secondary)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {p.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ProgressStrip({ items, color }) {
+  if (!items || items.length === 0) return null
+  const active = [...items].reverse().find(p => p.status !== 'done') || items[items.length - 1]
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '0 12px 7px', borderTop: '1px dashed var(--item-border)',
+    }}>
+      <Loader2 size={10} color={color} style={{ animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
+      <span style={{
+        fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: "'Knewave', cursive",
+        letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>
+        {active.text}
+      </span>
     </div>
   )
 }
@@ -94,8 +139,11 @@ export default function SubagentOutput({ streams = {}, activeSource = null, stre
               {(hasBody && !active) && (expanded ? <ChevronUp size={11} color="var(--text-muted)" style={{ flexShrink: 0 }} /> : <ChevronDown size={11} color="var(--text-muted)" style={{ flexShrink: 0 }} />)}
             </button>
 
+            {streaming && <ProgressStrip items={stream.progress} color={color} />}
+
             {expanded && hasBody && (
               <div style={{ padding: '2px 12px 10px', borderTop: '1px dashed var(--item-border)' }}>
+                {streaming && <ProgressList items={stream.progress} color={color} />}
                 {hasReasoning && <Reasoning text={stream.reasoning} color={color} />}
                 {hasContent && <SmartContent text={stream.content} />}
               </div>

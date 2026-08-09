@@ -54,6 +54,7 @@ from deepagents import CompiledSubAgent, create_deep_agent
 from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
 
+from agents.common.progress import AnnounceToolCalls, progress as emit_progress
 from agents.common.tool_scoping import scope_tools_to_brand
 from db import crud_research as crud
 from db.session import AsyncSessionLocal
@@ -78,15 +79,18 @@ def _category_from_task(task_obj: Any) -> str | None:
 async def build_context_node(state: ResearchPipelineState) -> dict:
     brand_id = state["brand_id"]
     logger.info("[ResearchAgent] Building business context for brand_id=%s", brand_id)
+    emit_progress("build_context", "started", "Building business context")
     category = _category_from_task(state.get("task", {}))
     async with AsyncSessionLocal() as session:
         context = await crud.get_business_context(session, brand_id, category=category)
+    emit_progress("build_context", "done", "Business context ready")
     return {"context": context}
 
 
 async def reasoning_node(state: ResearchPipelineState) -> dict:
     brand_id = state["brand_id"]
     logger.info("[ResearchAgent] Running reasoning node for brand_id=%s", brand_id)
+    emit_progress("reason", "started", "Running analysis — calling tools as needed")
 
     shopify_tools = scope_tools_to_brand(await get_shopify_tools_for_research(), brand_id)
     web_tools = await get_research_web_tools()  # public data — never brand_id-scoped
@@ -99,7 +103,7 @@ async def reasoning_node(state: ResearchPipelineState) -> dict:
         model_kwargs={"reasoning_effort": "high"},
     )
 
-    agent = create_deep_agent(model, tools)
+    agent = create_deep_agent(model, tools, middleware=[AnnounceToolCalls()])
 
     messages = state.get("messages", [])
     if messages:
@@ -122,6 +126,7 @@ async def reasoning_node(state: ResearchPipelineState) -> dict:
         for call in (getattr(message, "tool_calls", None) or [])
     })
 
+    emit_progress("reason", "done", "Analysis complete")
     logger.info("[ResearchAgent] Reasoning node finished for brand_id=%s. Tools used: %s", brand_id, tools_used)
     return {"messages": result["messages"], "tools_used": tools_used}
 
@@ -129,6 +134,7 @@ async def reasoning_node(state: ResearchPipelineState) -> dict:
 async def extract_decision_node(state: ResearchPipelineState) -> dict:
     """Condense the ReAct transcript into the structured decision object."""
     logger.info("[ResearchAgent] Extracting structured decision for brand_id=%s", state["brand_id"])
+    emit_progress("extract_decision", "started", "Extracting structured decision")
     model = init_chat_model("google_genai:gemini-3.6-flash").with_structured_output(ResearchDecision)
 
     transcript = "\n".join(
@@ -145,6 +151,7 @@ async def extract_decision_node(state: ResearchPipelineState) -> dict:
     )
 
     logger.info("[ResearchAgent] Decision extracted for brand_id=%s: summary=%s", state["brand_id"], decision.summary[:100] if decision.summary else "")
+    emit_progress("extract_decision", "done", "Decision extracted")
     return {
         "trends": [t.model_dump() for t in decision.trends],
         "insights": [i.model_dump() for i in decision.insights],
@@ -162,6 +169,7 @@ async def persist_node(state: ResearchPipelineState) -> dict:
     summary = state.get("summary", "")
 
     logger.info("[ResearchAgent] Persisting outputs for brand_id=%s (trends=%d, insights=%d)", brand_id, len(trends), len(insights))
+    emit_progress("persist", "started", "Persisting results")
     async with AsyncSessionLocal() as session:
         if trends:
             await crud.save_trends(session, brand_id, trends)
@@ -177,6 +185,7 @@ async def persist_node(state: ResearchPipelineState) -> dict:
     if insights:
         db_updates.append(f"research_insights: +{len(insights)}")
 
+    emit_progress("persist", "done", "Results saved")
     return {"status": "completed", "db_updates": db_updates}
 
 
