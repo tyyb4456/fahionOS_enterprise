@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
-import { LayoutDashboard, History, CheckSquare, FileText, RotateCcw, Inbox, TrendingUp, Settings, MessageSquare, Menu, X, Sun, Moon } from 'lucide-react'
+import { Settings, MessageSquare, Menu, X, Sun, Moon, Building2 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
 const navItems = [
-  { to: '/chat',      icon: MessageSquare,   label: 'Chat'      },
+  { to: '/office',   icon: Building2,    label: 'Office'   },
+  { to: '/chat',      icon: MessageSquare, label: 'Chat'      },
   { to: '/settings',  icon: Settings,         label: 'Settings'  },
 ]
 

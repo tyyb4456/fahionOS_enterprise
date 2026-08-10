@@ -12,6 +12,8 @@
   "dependencies": {
     "@clerk/clerk-react": "^5.61.8",
     "@icons-pack/react-simple-icons": "^13.13.0",
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
     "@tailwindcss/vite": "^4.3.1",
     "framer-motion": "^13.0.0",
     "lucide-react": "^1.18.0",
@@ -21,7 +23,8 @@
     "react-router-dom": "^7.17.0",
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
-    "tailwindcss": "^4.3.1"
+    "tailwindcss": "^4.3.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

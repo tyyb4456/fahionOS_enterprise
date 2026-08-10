@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
+from deep_agent.office_bus import office_bus
 from deep_agent.runtime import get_cached_agent
 
 # ── Persistence constants ───────────────────────────────────────────────────────
@@ -88,6 +89,32 @@ def _subagent_key(source: str) -> str:
     return source.split(" > ", 1)[0]
 
 
+# ── Office activity feed ───────────────────────────────────────────────────────
+# Human-readable labels for graph node names so the Virtual Office page can
+# show "Running analysis" instead of a raw graph node id. The actual rich text
+# comes from each subagent's emit_progress(...) custom events when available.
+
+NODE_ACTION = {
+    "model": "Thinking",
+    "build_context": "Reading brand context",
+    "reason": "Running analysis",
+    "extract_decision": "Structuring output",
+    "persist": "Saving results",
+    "tool": "Calling tools",
+}
+
+
+def _agent_label(key: str) -> str:
+    """inventory_agent -> Inventory"""
+    if not key or key == "supervisor":
+        return "Supervisor"
+    return key.replace("_agent", "").replace("_", " ").strip().title()
+
+
+def _publish_office(brand_id: str, event: dict) -> None:
+    office_bus.publish(brand_id, event)
+
+
 # ── Persistence (fire-and-forget) ───────────────────────────────────────────────
 
 async def _save_reasoning(
@@ -156,10 +183,17 @@ async def chat(brand_id: str, brand_name: str, message: str, thread_id: str = "d
     scoped_thread = f"{brand_id}:{thread_id}"
     config        = {"configurable": {"thread_id": scoped_thread}}
 
-    result = await agent.ainvoke(
-        {"messages": [{"role": "user", "content": message}], "brand_id": brand_id},
-        config=config,
-    )
+    _publish_office(brand_id, {"type": "run.start", "thread_id": thread_id})
+    _publish_office(brand_id, {"type": "supervisor.status", "status": "working", "action": "Received task"})
+    try:
+        result = await agent.ainvoke(
+            {"messages": [{"role": "user", "content": message}], "brand_id": brand_id},
+            config=config,
+        )
+    finally:
+        _publish_office(brand_id, {"type": "supervisor.status", "status": "idle", "action": "Standing by"})
+        _publish_office(brand_id, {"type": "run.end", "thread_id": thread_id})
+
     msgs = result.get("messages", [])
     if msgs:
         last = msgs[-1]
@@ -213,6 +247,10 @@ async def stream_chat(
     except Exception:
         turn_index = 0
 
+    _publish_office(brand_id, {"type": "run.start", "thread_id": thread_id})
+    _publish_office(brand_id, {"type": "supervisor.status", "status": "working", "action": "Received task"})
+    main_token_sent = False
+
     try:
         async for chunk in agent.astream(
             {"messages": [{"role": "user", "content": message}], "brand_id": brand_id},
@@ -229,8 +267,76 @@ async def stream_chat(
                     track_dispatches(ns, node_name, node_data)
                     yield {"type": "step", "source": source, "node": node_name}
 
+                    if source == "main agent":
+                        _publish_office(brand_id, {
+                            "type": "supervisor.status", "status": "working",
+                            "node": node_name,
+                            "action": NODE_ACTION.get(node_name, node_name.replace("_", " ").title()),
+                        })
+                        # A `task` tool call means the supervisor is delegating
+                        # to a subagent — surface it as a real inter-agent message.
+                        if node_name == "model":
+                            for msg in node_data.get("messages", []):
+                                for tc in getattr(msg, "tool_calls", []):
+                                    if tc["name"] == "task":
+                                        target = tc["args"].get("subagent_type", "subagent")
+                                        _publish_office(brand_id, {
+                                            "type": "agent.message", "from": "supervisor",
+                                            "to": target, "kind": "task",
+                                            "text": f"Task dispatched to {_agent_label(target)}",
+                                        })
+                                        _publish_office(brand_id, {
+                                            "type": "supervisor.status", "status": "working",
+                                            "action": f"Delegating to {_agent_label(target)}",
+                                        })
+                    else:
+                        _publish_office(brand_id, {
+                            "type": "agent.status", "agent": _subagent_key(source),
+                            "status": "working", "node": node_name,
+                            "action": NODE_ACTION.get(node_name, node_name.replace("_", " ").title()),
+                        })
+
             elif chunk["type"] == "custom":
                 yield {"type": "custom", "source": source, "data": chunk["data"]}
+
+                data = chunk["data"]
+                if source == "main agent" or not isinstance(data, dict):
+                    continue
+                agent = _subagent_key(source)
+                if data.get("type") == "progress":
+                    stage  = data.get("stage")
+                    status = data.get("status")
+                    if status == "started":
+                        _publish_office(brand_id, {
+                            "type": "agent.status", "agent": agent,
+                            "status": "working", "node": stage,
+                            "action": data.get("message") or NODE_ACTION.get(stage),
+                        })
+                    elif status == "done" and stage == "persist":
+                        _publish_office(brand_id, {
+                            "type": "agent.status", "agent": agent,
+                            "status": "done", "node": stage,
+                            "action": "Finished",
+                        })
+                        _publish_office(brand_id, {
+                            "type": "agent.message", "from": agent, "to": "supervisor",
+                            "kind": "reply", "text": f"{_agent_label(agent)} analysis complete",
+                        })
+                        _publish_office(brand_id, {
+                            "type": "supervisor.status", "status": "working",
+                            "action": f"Reviewing {_agent_label(agent)}",
+                        })
+                    elif status == "error":
+                        _publish_office(brand_id, {
+                            "type": "agent.status", "agent": agent,
+                            "status": "error", "node": stage,
+                            "action": data.get("message") or "Failed",
+                        })
+                elif data.get("type") == "tool":
+                    _publish_office(brand_id, {
+                        "type": "agent.tool", "agent": agent,
+                        "tool": data.get("name"), "status": data.get("status", "started"),
+                    })
 
             elif chunk["type"] == "messages":
                 token, _metadata = chunk["data"]
@@ -262,6 +368,12 @@ async def stream_chat(
                                     acc["reasoning"] += part
                                 yield {"type": "reasoning", "source": source, "content": part}
                     elif btype == "text" and block.get("text"):
+                        if is_main and not main_token_sent:
+                            main_token_sent = True
+                            _publish_office(brand_id, {
+                                "type": "supervisor.status", "status": "working",
+                                "action": "Writing response",
+                            })
                         if not is_main:
                             acc = subagent_accum.setdefault(_subagent_key(source), {"content": "", "reasoning": ""})
                             acc["content"] += block["text"]
@@ -277,6 +389,7 @@ async def stream_chat(
 
     except Exception as exc:
         logger.error("stream_chat failed for thread=%s: %s", thread_id, exc)
+        _publish_office(brand_id, {"type": "supervisor.status", "status": "error", "action": "Run failed"})
         yield {"type": "error", "content": str(exc)}
 
     if reasoning_accum or subagent_accum:
@@ -293,4 +406,6 @@ async def stream_chat(
                 source=src_key, content=data["content"], reasoning=data["reasoning"], seq=seq,
             ))
 
+    _publish_office(brand_id, {"type": "supervisor.status", "status": "idle", "action": "Standing by"})
+    _publish_office(brand_id, {"type": "run.end", "thread_id": thread_id})
     yield {"type": "done"}

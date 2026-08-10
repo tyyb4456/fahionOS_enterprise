@@ -18,7 +18,7 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import brands, clerk_webhook, oauth, chat, shopify_webhook, policy_documents
+from api.routers import brands, clerk_webhook, oauth, chat, shopify_webhook, policy_documents, office
 from api.routers.agents import (
     inventory as inventory_agent,
     sales as sales_agent,
@@ -104,6 +104,7 @@ app.include_router(chat.router)
 # webhook Shopify sends 404s and the Postgres mirror never syncs.
 app.include_router(shopify_webhook.router)
 app.include_router(policy_documents.router)
+app.include_router(office.router)
 app.include_router(inventory_agent.router)
 app.include_router(sales_agent.router)
 app.include_router(marketing_agent.router)
