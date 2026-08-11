@@ -6,7 +6,13 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { SUPERVISOR } from './config'
 import { toColor, SKINS, HAIRS } from './materials'
-import { WALK_SPEED, HOVER_MS, faceDir, v3, pathToSupervisor, pathToDesk, pathToRest } from './paths'
+import {
+  WALK_SPEED, HOVER_MS, REPORT_LEG_MS, faceDir, v3,
+  pathToSupervisor, pathToDesk, pathToRest, STAFF_HOME,
+} from './paths'
+import { GLTFAvatar } from './GLTFAvatar'
+
+const TEST_GLTF_AGENT = 'marketing_agent' // swap to whichever agent you want to test
 
 export function WorkerHead({ skin, hair, hairStyle, y, headRef }) {
   return (
@@ -429,27 +435,38 @@ export function StandingWorker({ color, variant, walking }) {
 
 /* ══════════════════════════════════════════════════════════════════════════════
    MOBILE WORKER — an avatar driven by a single `choreo` command:
-     • {kind:'called'}  walk to the supervisor's office, hover (receive the
-                        assignment), then walk back to the desk and sit.
-     • {kind:'report'}  walk to the supervisor's office, hover (report back),
-                        then walk back to the desk and sit.
-     • {kind:'rest'}    walk to the break room and stand there (stays).
+     • {kind:'called'}  from the staff area → walk to the supervisor's office,
+                        hover (receive the assignment), then walk on to the desk.
+     • {kind:'report'}  from the desk → walk to the supervisor's office, hover
+                        (report back), then walk back to the staff area.
+     • {kind:'rest'}    walk to the staff area (its initial home) and stand there.
      • {kind:'desk'}    walk back to the desk and sit.
-     • null             stay put (seated at the desk, or at rest).
-   New commands are ignored while a walk/hover is already in progress — the
-   parent re-issues after onSeated/onArrived resolves.
+     • null             stay put (seated at the desk, or standing at the staff area).
+   Workers mount at their staff-centre stall (in front of the break-room
+   counter) and idle there standing until a command arrives; the supervisor
+   (no stall) stays put seated at its office. New commands are ignored while a
+   walk/hover is in progress — the parent re-issues after onSeated/onArrived
+   resolves.
    ══════════════════════════════════════════════════════════════════════════════ */
 export function MobileWorker({ choreo, restFacing, color, status, variant, seatedFacing, home, keyName, onSeated, onArrived }) {
   const groupRef = useRef(null)
-  const [pose, setPose] = useState('seated')
+  const parked = !!STAFF_HOME[keyName] // has a staff-centre stall → idles standing there (supervisor stays seated)
+  const [pose, setPose] = useState(parked ? 'standing' : 'seated')
   const [walking, setWalking] = useState(false)
-  const phaseRef = useRef('seated') // 'seated' | 'atRest' | 'walking' | 'hover'
+  const phaseRef = useRef(parked ? 'atRest' : 'seated') // 'seated' | 'atRest' | 'walking' | 'hover'
   const pathRef = useRef([])
   const destRef = useRef('desk')
   const segRef = useRef(0)
   const distRef = useRef(0)
   const hoverTRef = useRef(0)
-  const faceRef = useRef(seatedFacing)
+  const faceRef = useRef(parked ? restFacing : seatedFacing)
+  const reportRef = useRef(false) // hovering for a report (short check-in) vs receiving an assignment
+  const effectiveWalkSpeed = keyName === TEST_GLTF_AGENT ? 1.6 : WALK_SPEED
+  // Workers mount at their staff-centre stall (in front of the break-room
+  // counter) and idle there standing until a command arrives; the supervisor
+  // (no stall) stays put at its home. Only read at mount — the walking loop
+  // takes over.
+  const initialHome = STAFF_HOME[keyName] || home
 
   const arrive = useCallback(() => {
     const g = groupRef.current
@@ -478,8 +495,13 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
   const startChoreo = useCallback((cmd) => {
     const g = groupRef.current
     if (!g) return
-    const from = g.position
+    // Snapshot the start position — pathTo* embeds it as path[0], and the
+    // walking loop lerpVectors() writes into g.position every frame. If we
+    // passed the live object, mutating g.position would silently drag path[0]
+    // forward too, collapsing the first segment (the "instant slip").
+    const from = g.position.clone()
     const kind = cmd.kind
+    reportRef.current = cmd.kind === 'report'
     pathRef.current = kind === 'rest' ? pathToRest(from, cmd.target)
       : kind === 'desk' ? pathToDesk(from, keyName)
       : pathToSupervisor(from, keyName)
@@ -506,7 +528,7 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
 
     if (phase === 'walking') {
       const path = pathRef.current
-      let rem = dt * WALK_SPEED
+      let rem = dt * effectiveWalkSpeed
       while (rem > 0 && segRef.current < path.length - 1) {
         const a = path[segRef.current]
         const b = path[segRef.current + 1]
@@ -531,10 +553,18 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
       }
     } else if (phase === 'hover') {
       hoverTRef.current += dt * 1000
-      if (hoverTRef.current >= HOVER_MS) {
-        // Receive/report done — head back to the desk.
-        pathRef.current = pathToDesk(g.position, keyName)
-        destRef.current = 'desk'
+      if (hoverTRef.current >= (reportRef.current ? REPORT_LEG_MS : HOVER_MS)) {
+        // clone() again: path[0] must be a snapshot, not the live position
+        // that gets lerp-mutated for the next segment.
+        if (reportRef.current) {
+          // Report done — head back to the staff centre (its initial home).
+          pathRef.current = pathToRest(g.position.clone(), STAFF_HOME[keyName])
+          destRef.current = 'rest'
+        } else {
+          // Assignment received — walk on to the desk and sit down.
+          pathRef.current = pathToDesk(g.position.clone(), keyName)
+          destRef.current = 'desk'
+        }
         if (pathRef.current.length < 2) { arrive(); return }
         segRef.current = 0
         distRef.current = 0
@@ -554,8 +584,10 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
   })
 
   return (
-    <group ref={groupRef} position={home}>
-      {pose === 'seated' ? (
+    <group ref={groupRef} position={initialHome}>
+      {keyName === TEST_GLTF_AGENT ? (
+        <GLTFAvatar walking={walking} seated={pose === 'seated'} scale={1} yOffset={0} />
+      ) : pose === 'seated' ? (
         <Worker color={color} status={status} variant={variant} />
       ) : (
         <StandingWorker color={color} variant={variant} walking={walking} />

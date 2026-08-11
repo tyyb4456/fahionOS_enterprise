@@ -118,10 +118,15 @@ export function Monitor({ color, status, selected }) {
 
 /* ══════════════════════════════════════════════════════════════════════════════
    KEYBOARD + MOUSE
+   Positioned so the seated characters' hands land on them. Both the procedural
+   Worker and the GLTF mocap avatar type with their hands at station z ≈ 0.05,
+   y ≈ 0.83 (the seat sits 0.45 in front of the desk origin) — so the board is
+   pulled up near the desk's front edge (desk-local z 0.32 → station 0.00),
+   raised slightly to key height, and the mouse sits just right of the keys.
    ══════════════════════════════════════════════════════════════════════════════ */
 export function Peripherals() {
   return (
-    <group position={[0, 0.78, 0.02]}>
+    <group position={[0, 0.8, 0.32]}>
       <mesh castShadow>
         <boxGeometry args={[0.6, 0.02, 0.2]} />
         <meshStandardMaterial color="#262630" metalness={0.3} roughness={0.6} />
@@ -132,9 +137,11 @@ export function Peripherals() {
           <meshStandardMaterial color="#3a3a46" roughness={0.7} />
         </mesh>
       ))}
-      <mesh position={[0.4, 0.03, 0.08]}>
-        <capsuleGeometry args={[0.03, 0.04, 4, 10]} />
-        <meshStandardMaterial color="#33333e" metalness={0.35} roughness={0.5} />
+      {/* Sized up and lightened — the old color nearly matched the desk
+          laminate and disappeared against it. */}
+      <mesh castShadow position={[0.34, 0.033, 0.34]}>
+        <capsuleGeometry args={[0.04, 0.05, 4, 10]} />
+        <meshStandardMaterial color="#55555f" metalness={0.3} roughness={0.45} />
       </mesh>
     </group>
   )

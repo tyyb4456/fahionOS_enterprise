@@ -12,86 +12,45 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { agentMeta, AGENT_ORDER, SUPERVISOR, GOLD3 } from './config'
-import { BAR_SEATS, agentSeat, faceDir, SUP_HOME, AGENT_HOME } from './paths'
+import { STAFF_HOME, SUP_HOME, AGENT_HOME } from './paths'
 import { Room, BreakRoom } from './environment'
 import { ConnectionLines, ActiveBeams, TravelingPacket, Pos } from './comms'
 import { SupervisorStation, AgentStation } from './stations'
-import { MobileWorker } from './characters'
+// import { MobileWorker } from './characters'
 
 /* ══════════════════════════════════════════════════════════════════════════════
    MAIN SCENE — choreography orchestrator + Canvas wrapper (default export)
    ══════════════════════════════════════════════════════════════════════════════ */
 function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile, controlsRef }) {
-  // ── Task-assignment choreography — driven purely by feed status transitions:
-  //    idle agents hang out at the break room; a dispatch (idle→working) makes
-  //    the agent walk up to the supervisor's office to receive the task, return
-  //    to its desk and work; completion (→done) makes it walk up to report, then
-  //    head back to the break room (or stay put if it goes straight back to work).
+  // ── Task-assignment choreography — the staff centre (break-room counter at
+  //    the front) is every agent's home: they idle there until a task is
+  //    assigned. A dispatch (idle→working) sends them up to the supervisor's
+  //    office to receive the assignment, then on to their desk to work.
+  //    Completion (→done) makes them walk back up to report, then return to
+  //    the staff centre to idle.
   const [choreo, setChoreo] = useState({})
   const desiredRef = useRef({})   // key -> 'idle' | 'called' | 'report' | 'working'
   const busyRef = useRef({})      // a walk/hover is in progress
-  const atDeskRef = useRef(Object.fromEntries(AGENT_ORDER.map(k => [k, true])))
+  const atDeskRef = useRef(Object.fromEntries(AGENT_ORDER.map(k => [k, false]))) // agents start at the staff centre
   const issuedRef = useRef({})    // last commanded choreo kind (dedupe)
   const prevStatusRef = useRef(null)
   const agentsRef = useRef(agents)
   useEffect(() => { agentsRef.current = agents }, [agents])
 
-  // ── Break-room seat assignment — idle agents claim the nearest free seat so
-  //    they spread around the counter instead of lining up at one point. ──
-  const [seatMap, setSeatMap] = useState({})        // key -> BAR_SEATS index
-  const seatMapRef = useRef({})
-  const assignSeat = useCallback((key) => {
-    if (seatMapRef.current[key] != null) return seatMapRef.current[key]
-    const taken = new Set(Object.values(seatMapRef.current))
-    const from = agentSeat(key) // proxy for the agent's position when it goes idle
-    let best = 0
-    let bestD = Infinity
-    BAR_SEATS.forEach((s, i) => {
-      if (taken.has(i)) return
-      const d = from.distanceTo(s)
-      if (d < bestD) { bestD = d; best = i }
-    })
-    const next = { ...seatMapRef.current, [key]: best }
-    seatMapRef.current = next
-    setSeatMap(next)
-    return best
-  }, [])
-  const releaseSeat = useCallback((key) => {
-    if (seatMapRef.current[key] == null) return
-    const next = { ...seatMapRef.current }
-    delete next[key]
-    seatMapRef.current = next
-    setSeatMap(next)
-  }, [])
-  // Facing for each resting agent: face the counter (yaw 0), but turn slightly
-  // toward an idle neighbour in an adjacent seat so pairs read as chatting.
+  // Resting yaw at the staff centre — agents face the counter (-z) with a
+  // slight alternation so clustered neighbours read as chatting.
   const restFacing = useMemo(() => {
     const out = {}
-    const keys = AGENT_ORDER.filter(k => seatMap[k] != null)
-    for (const k of keys) {
-      const pos = BAR_SEATS[seatMap[k]]
-      let yaw = 0
-      let best = null
-      let bestD = Infinity
-      for (const m of keys) {
-        if (m === k) continue
-        const other = BAR_SEATS[seatMap[m]]
-        const d = Math.hypot(other.x - pos.x, other.z - pos.z)
-        if (d < bestD) { bestD = d; best = other }
-      }
-      if (best && bestD <= 3.0) yaw = faceDir(pos, best) * 0.45
-      out[k] = yaw
-    }
+    AGENT_ORDER.forEach((k, i) => { out[k] = i % 2 === 0 ? -0.18 : 0.18 })
     return out
-  }, [seatMap])
+  }, [])
 
   const issue = useCallback((key, kind, extra) => {
     if (busyRef.current[key]) return
     if (issuedRef.current[key] === kind) return
     issuedRef.current[key] = kind
     busyRef.current[key] = kind !== null
-    if (kind && kind !== 'desk') atDeskRef.current[key] = false
-    if (kind && kind !== 'rest') releaseSeat(key) // leaving idle frees the seat
+    if (kind && kind !== 'desk') atDeskRef.current[key] = false // leaving the desk (or en route)
     setChoreo(prev => {
       if (prev[key]?.kind === kind) return prev
       const next = { ...prev }
@@ -99,26 +58,20 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
       else delete next[key]
       return next
     })
-  }, [releaseSeat])
+  }, [])
 
   const decide = useCallback((key) => {
     if (busyRef.current[key]) return
     const desired = desiredRef.current[key]
     if (!desired) return
-    if (desired === 'called') { issue(key, 'called'); return }
-    if (desired === 'report') { issue(key, 'report'); return }
+    if (desired === 'called') { if (!atDeskRef.current[key]) issue(key, 'called'); return }
+    if (desired === 'report') { if (atDeskRef.current[key]) issue(key, 'report'); return }
     if (desired === 'working') { if (!atDeskRef.current[key]) issue(key, 'desk'); return }
-    if (desired === 'idle') {
-      if (atDeskRef.current[key]) {
-        const idx = assignSeat(key)
-        issue(key, 'rest', { target: BAR_SEATS[idx] })
-      }
-      return
-    }
-  }, [assignSeat, issue])
+    if (desired === 'idle') { if (atDeskRef.current[key]) issue(key, 'rest', { target: STAFF_HOME[key] }); return }
+  }, [issue])
 
-  // The worker sat back down at its desk — decide what it should do next from
-  // the agent's current feed status.
+  // The worker sat down at its desk — it's now working (or done, waiting for
+  // the next status flip to send it up to report).
   const handleSeated = useCallback((key) => {
     atDeskRef.current[key] = true
     busyRef.current[key] = false
@@ -128,9 +81,14 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
     decide(key)
   }, [decide])
 
+  // The worker reached the staff area (or any non-desk destination) — it idles
+  // there until a new task is dispatched.
   const handleArrived = useCallback((key) => {
+    atDeskRef.current[key] = false
     busyRef.current[key] = false
     issuedRef.current[key] = null
+    const st = (agentsRef.current[key] || {}).status || 'idle'
+    desiredRef.current[key] = st === 'working' ? 'called' : 'idle'
     decide(key)
   }, [decide])
 
@@ -162,7 +120,7 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
         decide(key)
       }
     })
-    // Run finished / reset — everyone clocks out to the break room.
+    // Run finished / reset — everyone clocks out to the staff area.
     if (supStatus === 'idle' && prev.supervisor !== 'idle') {
       AGENT_ORDER.forEach(key => { desiredRef.current[key] = 'idle'; decide(key) })
     }
@@ -225,9 +183,9 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
       })}
 
       {/* Moving workers — choreographed by the task-assignment state machine:
-          idle → break room · dispatched → supervisor (receive) → desk → work ·
-          done → supervisor (report) → break room again. */}
-      <MobileWorker
+          staff centre (idle) · dispatched → supervisor (receive) → desk → work ·
+          done → supervisor (report) → back to the staff centre. */}
+      {/* <MobileWorker
         key="supervisor-mover"
         choreo={null}
         restFacing={0}
@@ -253,7 +211,7 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
           onSeated={handleSeated}
           onArrived={handleArrived}
         />
-      ))}
+      ))} */}
 
       {/* Communication packets */}
       {packets.map(p => {
