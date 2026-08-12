@@ -8,7 +8,7 @@ import { SUPERVISOR } from './config'
 import { toColor, SKINS, HAIRS } from './materials'
 import {
   WALK_SPEED, HOVER_MS, REPORT_LEG_MS, faceDir, v3,
-  pathToSupervisor, pathToDesk, pathToRest, STAFF_HOME,
+  pathToSupervisor, pathToDesk, pathToRest, roundPath, STAFF_HOME, BREAK_HOME,
 } from './paths'
 import { GLTFAvatar } from './GLTFAvatar'
 
@@ -333,20 +333,28 @@ export function StandingWorker({ color, variant, walking }) {
         headRef.current.rotation.y = Math.sin(t * 0.4) * 0.08
       }
     } else {
-      // Hovering / standing still — breathing, weight shift, idle glance around
-      g.position.y = Math.sin(t * 1.2) * 0.006
-      if (legLRef.current) legLRef.current.rotation.x = 0
-      if (legRRef.current) legRRef.current.rotation.x = 0
-      if (armLRef.current) armLRef.current.rotation.x = -0.06 + Math.sin(t * 0.7 + 1) * 0.03
-      if (armRRef.current) armRRef.current.rotation.x = -0.06 + Math.sin(t * 0.7 + 4) * 0.03
+      // Hovering / standing still — natural idle with weight shift, breathing,
+      // and varied head glancing. Per-variant phase offset so each worker
+      // animates differently even when side by side.
+      const v = (variant || 0) * 1.7  // phase offset per character
+      g.position.y = Math.sin(t * 1.1 + v) * 0.005
+      // Weight shift — one leg slightly bent, the other straight
+      if (legLRef.current) legLRef.current.rotation.x = Math.sin(t * 0.35 + v) * 0.04
+      if (legRRef.current) legRRef.current.rotation.x = -Math.sin(t * 0.35 + v) * 0.03
+      // Arms — asymmetric. One hangs relaxed, the other bends slightly
+      // (like resting a hand on hip or holding a coffee cup)
+      if (armLRef.current) armLRef.current.rotation.x = 0.05 + Math.sin(t * 0.6 + v) * 0.04
+      if (armRRef.current) armRRef.current.rotation.x = 0.12 + Math.sin(t * 0.45 + v + 2) * 0.03
       if (bodyRef.current) {
-        bodyRef.current.rotation.x = -0.03 + Math.sin(t * 1.2) * 0.008
-        bodyRef.current.rotation.z = Math.sin(t * 0.6) * 0.025
+        // Subtle torso sway — shifts weight side to side
+        bodyRef.current.rotation.x = -0.02 + Math.sin(t * 0.9 + v) * 0.01
+        bodyRef.current.rotation.z = Math.sin(t * 0.35 + v) * 0.035
       }
       if (headRef.current) {
-        headRef.current.rotation.x = 0.03 + Math.sin(t * 0.9) * 0.02
-        headRef.current.rotation.y = Math.sin(t * 0.32) * 0.25 + Math.sin(t * 1.3) * 0.07
-        headRef.current.rotation.z = Math.sin(t * 0.8 + 2) * 0.03
+        // Natural head movement — glancing around, occasional nod
+        headRef.current.rotation.x = 0.02 + Math.sin(t * 0.7 + v) * 0.04 + Math.max(0, Math.sin(t * 0.22 + v) - 0.6) * 0.15
+        headRef.current.rotation.y = Math.sin(t * 0.28 + v) * 0.3 + Math.sin(t * 1.1 + v) * 0.08
+        headRef.current.rotation.z = Math.sin(t * 0.55 + v + 1.5) * 0.04
       }
     }
   })
@@ -400,7 +408,7 @@ export function StandingWorker({ color, variant, walking }) {
             <capsuleGeometry args={[0.062, 0.28, 4, 10]} />
             <meshStandardMaterial color={shirt} roughness={0.85} />
           </mesh>
-          <group position={[0, -0.4, 0]} rotation-x={0.12}>
+          <group position={[0, -0.4, 0]} rotation-x={0.0}>
             <mesh position={[0, -0.1, 0]} castShadow>
               <capsuleGeometry args={[0.052, 0.18, 4, 10]} />
               <meshStandardMaterial color={shirt} roughness={0.85} />
@@ -416,7 +424,7 @@ export function StandingWorker({ color, variant, walking }) {
             <capsuleGeometry args={[0.062, 0.28, 4, 10]} />
             <meshStandardMaterial color={shirt} roughness={0.85} />
           </mesh>
-          <group position={[0, -0.4, 0]} rotation-x={0.12}>
+          <group position={[0, -0.4, 0]} rotation-x={0.0}>
             <mesh position={[0, -0.1, 0]} castShadow>
               <capsuleGeometry args={[0.052, 0.18, 4, 10]} />
               <meshStandardMaterial color={shirt} roughness={0.85} />
@@ -450,12 +458,12 @@ export function StandingWorker({ color, variant, walking }) {
    ══════════════════════════════════════════════════════════════════════════════ */
 export function MobileWorker({ choreo, restFacing, color, status, variant, seatedFacing, home, keyName, onSeated, onArrived }) {
   const groupRef = useRef(null)
-  const parked = !!STAFF_HOME[keyName] // has a staff-centre stall → idles standing there (supervisor stays seated)
+  const parked = !!STAFF_HOME(keyName)
   const [pose, setPose] = useState(parked ? 'standing' : 'seated')
   const [walking, setWalking] = useState(false)
   const phaseRef = useRef(parked ? 'atRest' : 'seated') // 'seated' | 'atRest' | 'walking' | 'hover'
   const pathRef = useRef([])
-  const destRef = useRef('desk')
+  const destRef = useRef(parked ? 'rest' : 'desk')
   const segRef = useRef(0)
   const distRef = useRef(0)
   const hoverTRef = useRef(0)
@@ -466,7 +474,7 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
   // counter) and idle there standing until a command arrives; the supervisor
   // (no stall) stays put at its home. Only read at mount — the walking loop
   // takes over.
-  const initialHome = STAFF_HOME[keyName] || home
+  const initialHome = STAFF_HOME(keyName) || home
 
   const arrive = useCallback(() => {
     const g = groupRef.current
@@ -483,7 +491,7 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
       setWalking(false)
       faceRef.current = restFacing
       if (onArrived) onArrived(keyName)
-    } else {
+    } else if (destRef.current === 'desk') {
       phaseRef.current = 'seated'
       setPose('seated')
       setWalking(false)
@@ -502,9 +510,9 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
     const from = g.position.clone()
     const kind = cmd.kind
     reportRef.current = cmd.kind === 'report'
-    pathRef.current = kind === 'rest' ? pathToRest(from, cmd.target)
+    pathRef.current = roundPath(kind === 'rest' ? pathToRest(from, cmd.target)
       : kind === 'desk' ? pathToDesk(from, keyName)
-      : pathToSupervisor(from, keyName)
+      : pathToSupervisor(from, keyName))
     destRef.current = kind === 'rest' ? 'rest' : kind === 'desk' ? 'desk' : 'supervisor'
     if (pathRef.current.length < 2) { arrive(); return }
     phaseRef.current = 'walking'
@@ -558,11 +566,11 @@ export function MobileWorker({ choreo, restFacing, color, status, variant, seate
         // that gets lerp-mutated for the next segment.
         if (reportRef.current) {
           // Report done — head back to the staff centre (its initial home).
-          pathRef.current = pathToRest(g.position.clone(), STAFF_HOME[keyName])
+          pathRef.current = roundPath(pathToRest(g.position.clone(), STAFF_HOME(keyName)))
           destRef.current = 'rest'
         } else {
           // Assignment received — walk on to the desk and sit down.
-          pathRef.current = pathToDesk(g.position.clone(), keyName)
+          pathRef.current = roundPath(pathToDesk(g.position.clone(), keyName))
           destRef.current = 'desk'
         }
         if (pathRef.current.length < 2) { arrive(); return }

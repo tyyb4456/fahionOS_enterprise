@@ -12,11 +12,11 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { agentMeta, AGENT_ORDER, SUPERVISOR, GOLD3 } from './config'
-import { STAFF_HOME, SUP_HOME, AGENT_HOME } from './paths'
+import { STAFF_HOME, STAFF_FACING, SUP_HOME, AGENT_HOME } from './paths'
 import { Room, BreakRoom } from './environment'
 import { ConnectionLines, ActiveBeams, TravelingPacket, Pos } from './comms'
 import { SupervisorStation, AgentStation } from './stations'
-// import { MobileWorker } from './characters'
+import { MobileWorker } from './characters'
 
 /* ══════════════════════════════════════════════════════════════════════════════
    MAIN SCENE — choreography orchestrator + Canvas wrapper (default export)
@@ -37,11 +37,12 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
   const agentsRef = useRef(agents)
   useEffect(() => { agentsRef.current = agents }, [agents])
 
-  // Resting yaw at the staff centre — agents face the counter (-z) with a
-  // slight alternation so clustered neighbours read as chatting.
+  // Resting yaw at the staff-stall nook — one random draw per worker per
+  // session so the crowd faces a natural mix of directions, never a uniform
+  // court-martial line-up.
   const restFacing = useMemo(() => {
     const out = {}
-    AGENT_ORDER.forEach((k, i) => { out[k] = i % 2 === 0 ? -0.18 : 0.18 })
+    AGENT_ORDER.forEach((k) => { out[k] = STAFF_FACING(k) })
     return out
   }, [])
 
@@ -51,6 +52,9 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
     issuedRef.current[key] = kind
     busyRef.current[key] = kind !== null
     if (kind && kind !== 'desk') atDeskRef.current[key] = false // leaving the desk (or en route)
+    // Each worker returns to its own session-assigned nook spot — stable the
+    // whole run, so idle positions never reshuffle.
+    if (kind === 'rest') extra = { ...extra, target: STAFF_HOME(key) }
     setChoreo(prev => {
       if (prev[key]?.kind === kind) return prev
       const next = { ...prev }
@@ -67,7 +71,7 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
     if (desired === 'called') { if (!atDeskRef.current[key]) issue(key, 'called'); return }
     if (desired === 'report') { if (atDeskRef.current[key]) issue(key, 'report'); return }
     if (desired === 'working') { if (!atDeskRef.current[key]) issue(key, 'desk'); return }
-    if (desired === 'idle') { if (atDeskRef.current[key]) issue(key, 'rest', { target: STAFF_HOME[key] }); return }
+    if (desired === 'idle') { if (atDeskRef.current[key]) issue(key, 'rest'); return }
   }, [issue])
 
   // The worker sat down at its desk — it's now working (or done, waiting for
@@ -185,7 +189,7 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
       {/* Moving workers — choreographed by the task-assignment state machine:
           staff centre (idle) · dispatched → supervisor (receive) → desk → work ·
           done → supervisor (report) → back to the staff centre. */}
-      {/* <MobileWorker
+      <MobileWorker
         key="supervisor-mover"
         choreo={null}
         restFacing={0}
@@ -203,6 +207,7 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
           key={`agent-${key}`}
           choreo={choreo[key] || null}
           restFacing={restFacing[key] || 0}
+          color={agentMeta(key).color}
           status={(agents[key] || {}).status || 'idle'}
           variant={AGENT_ORDER.indexOf(key)}
           seatedFacing={agentMeta(key).rot}
@@ -211,7 +216,7 @@ function OfficeScene({ agents, supervisor, packets, selected, onSelect, isMobile
           onSeated={handleSeated}
           onArrived={handleArrived}
         />
-      ))} */}
+      ))}
 
       {/* Communication packets */}
       {packets.map(p => {
