@@ -119,16 +119,27 @@ function NightWindow({ position, width = 3.2, height = 1.8 }) {
 export function BreakRoom() {
   return (
     <group position={[0, 0, 6.5]}>
-      {/* Kitchen counter + lower cabinet */}
+      {/* Kitchen counter — split into two halves with a walkable gap at x=0 */}
       <group position={[0, 0, -0.9]}>
-        <mesh position={[0, 0.48, 0]} castShadow receiveShadow>
-          <boxGeometry args={[16, 0.96, 0.7]} />
+        {/* Left counter half (x from -8 to -1.25) */}
+        <mesh position={[-4.625, 0.48, 0]} castShadow receiveShadow>
+          <boxGeometry args={[6.75, 0.96, 0.7]} />
           <meshStandardMaterial color="#2e2e3a" roughness={0.8} />
         </mesh>
-        <mesh position={[0, 0.95, 0]} castShadow>
-          <boxGeometry args={[16, 0.05, 0.74]} />
+        <mesh position={[-4.625, 0.95, 0]} castShadow>
+          <boxGeometry args={[6.75, 0.05, 0.74]} />
           <meshStandardMaterial color="#4a4a5c" metalness={0.3} roughness={0.5} />
         </mesh>
+        {/* Right counter half (x from 1.25 to 8) */}
+        <mesh position={[4.625, 0.48, 0]} castShadow receiveShadow>
+          <boxGeometry args={[6.75, 0.96, 0.7]} />
+          <meshStandardMaterial color="#2e2e3a" roughness={0.8} />
+        </mesh>
+        <mesh position={[4.625, 0.95, 0]} castShadow>
+          <boxGeometry args={[6.75, 0.05, 0.74]} />
+          <meshStandardMaterial color="#4a4a5c" metalness={0.3} roughness={0.5} />
+        </mesh>
+        {/* Drawer handles — on each counter half */}
         {[-6, -2, 2, 6].map(x => (
           <mesh key={x} position={[x, 0.55, 0.36]}>
             <boxGeometry args={[0.3, 0.025, 0.02]} />
@@ -186,8 +197,8 @@ export function BreakRoom() {
           <meshStandardMaterial color="#5a5a6a" metalness={0.5} roughness={0.4} />
         </mesh>
       </group>
-      {/* Bar stools in front of the counter */}
-      {[[-1.2, 0], [0, 0], [1.2, 0]].map(([x, z], i) => (
+      {/* Bar stools — placed on each side of the counter gap, clear of the corridor */}
+      {[[-3.5, 0], [-2.0, 0], [2.0, 0], [3.5, 0]].map(([x, z], i) => (
         <group key={i} position={[x, 0, 0.25 + z]}>
           <mesh position={[0, 0.05, 0]}>
             <cylinderGeometry args={[0.02, 0.02, 0.6, 6]} />

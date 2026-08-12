@@ -95,9 +95,11 @@ export const supVisitSpot = (key) => v3(SUPERVISOR.pos.x + (AGENT_ORDER.indexOf(
 const dedupe = (pts) => pts.filter((p, i) => i === 0 || p.distanceTo(pts[i - 1]) > 1e-4)
 
 // A worker leaving the break area (or the legacy nook) routes to the front
-// aisle, then down the x=0 corridor. The break area sits at z≈4 so it's
-// already in front of the front aisle (z=-1); we just step back to the aisle
-// and proceed up the corridor.
+// aisle, then down the x=0 corridor. The break area sits in front of the
+// kitchen counter (z > 5.2); workers walk through the counter gap (at x≈0)
+// to reach the desk-side walkway network.
+const COUNTER_GAP_X = 0     // center of the gap between counter halves
+const COUNTER_Z = 5.2       // z just behind the counter (desk-side)
 function exitStaffCenter(from) {
   if (inNook(from)) {
     // Legacy nook: back-aisle detour to the middle corridor.
@@ -106,8 +108,15 @@ function exitStaffCenter(from) {
       p: v3(0, FRONT_AISLE_Z),
     }
   }
-  // Break area (front of office): step back to the front aisle, then up the
-  // middle corridor to the supervisor / desks.
+  // Break area (in front of counter, z > COUNTER_Z): walk to the gap, through
+  // it, then to the front aisle.
+  if (from.z > COUNTER_Z) {
+    return {
+      pts: [from, v3(COUNTER_GAP_X, from.z), v3(COUNTER_GAP_X, FRONT_AISLE_Z)],
+      p: v3(COUNTER_GAP_X, FRONT_AISLE_Z),
+    }
+  }
+  // Already on the desk side of the counter — step to the front aisle.
   return {
     pts: [from, v3(from.x, FRONT_AISLE_Z), v3(0, FRONT_AISLE_Z)],
     p: v3(0, FRONT_AISLE_Z),
@@ -138,6 +147,10 @@ export function pathToRest(from, target) {
   if (inNook(target)) {
     // Legacy nook: enter from the front via corridor → back aisle → north mouth.
     out = [...pts, v3(from.x, FRONT_AISLE_Z), v3(0, FRONT_AISLE_Z), v3(0, AISLE_Z), v3(target.x, AISLE_Z), target]
+  } else if (target.z > COUNTER_Z) {
+    // Target is in the break area (in front of counter): route through the gap
+    // at x=0 to cross the counter, then walk to the target spot.
+    out = [...pts, v3(from.x, FRONT_AISLE_Z), v3(COUNTER_GAP_X, FRONT_AISLE_Z), v3(COUNTER_GAP_X, target.z), target]
   } else if (from.z < -6) {
     // Coming from deep in office (supervisor / back desks): corridor → front aisle → target.
     out = [...pts, v3(0, FRONT_AISLE_Z), v3(target.x, FRONT_AISLE_Z), target]
