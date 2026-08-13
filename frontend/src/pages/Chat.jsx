@@ -7,6 +7,7 @@ import MessageBubble from './chat/MessageBubble'
 import ConversationsSidebar from './chat/ConversationsSidebar'
 import ChatComposer from './chat/ChatComposer'
 import AgentActivity from './chat/AgentActivity'
+import useStreamBuffers from './chat/useTokenBuffer'
 // import OfficeBoard from './chat/OfficeBoard'
 
 // const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
@@ -53,6 +54,9 @@ export default function Chat() {
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   const abortRef = useRef(null)
+
+  // Token buffer system — smooth out SSE token rendering
+  const streamBuf = useStreamBuffers(setMessages)
 
   const greeting = getGreeting()
   const firstName = user?.firstName || 'there'
@@ -166,8 +170,12 @@ export default function Chat() {
     setInput('')
     setIsStreaming(true)
 
+    // Reset token buffers for the new message
+    streamBuf.reset()
+
     const userMsg = { id: Date.now(), role: 'user', content: trimmed }
     const asstId = Date.now() + 1
+    streamBuf.setAsstId(asstId)
     setMessages(prev => [...prev,
       userMsg,
     { id: asstId, role: 'assistant', content: '', toolCalls: [], reasoning: '', steps: [], subStreams: {}, streaming: true },
@@ -222,44 +230,23 @@ export default function Chat() {
               ))
               break
             case 'token': {
+              // Push into buffer instead of directly appending to state.
+              // The RAF drain loop in useStreamBuffers will smoothly reveal text.
               if (isMainAgent) {
-                setMessages(prev => prev.map(m =>
-                  m.id === asstId ? { ...m, content: m.content + evt.content } : m
-                ))
+                streamBuf.push('main:content', evt.content)
               } else {
                 const src = (evt.source || 'subagent').split(' > ')[0]
-                setMessages(prev => prev.map(m =>
-                  m.id === asstId
-                    ? {
-                        ...m,
-                        subStreams: {
-                          ...m.subStreams,
-                          [src]: { ...(m.subStreams[src] || {}), content: (m.subStreams[src]?.content || '') + evt.content },
-                        },
-                      }
-                    : m
-                ))
+                streamBuf.push(`sub:${src}:content`, evt.content)
               }
               break
             }
             case 'reasoning': {
+              // Push reasoning into buffer for smooth reveal.
               if (isMainAgent) {
-                setMessages(prev => prev.map(m =>
-                  m.id === asstId ? { ...m, reasoning: (m.reasoning || '') + evt.content } : m
-                ))
+                streamBuf.push('main:reasoning', evt.content)
               } else {
                 const src = (evt.source || 'subagent').split(' > ')[0]
-                setMessages(prev => prev.map(m =>
-                  m.id === asstId
-                    ? {
-                        ...m,
-                        subStreams: {
-                          ...m.subStreams,
-                          [src]: { ...(m.subStreams[src] || {}), reasoning: (m.subStreams[src]?.reasoning || '') + evt.content },
-                        },
-                      }
-                    : m
-                ))
+                streamBuf.push(`sub:${src}:reasoning`, evt.content)
               }
               break
             }
@@ -309,6 +296,8 @@ export default function Chat() {
               ))
               break
             case 'error':
+              // Flush all buffered text before showing error
+              streamBuf.flushAll()
               setMessages(prev => prev.map(m =>
                 m.id === asstId
                   ? { ...m, content: m.content + `\n\n⚠ ${evt.content}`, streaming: false }
@@ -316,9 +305,7 @@ export default function Chat() {
               ))
               break
             case 'done':
-              setMessages(prev => prev.map(m =>
-                m.id === asstId ? { ...m, streaming: false } : m
-              ))
+              streamBuf.flushAll()
               break
           }
         }
@@ -328,6 +315,7 @@ export default function Chat() {
 
     } catch (err) {
       if (err.name === 'AbortError') return
+      streamBuf.flushAll()
       setMessages(prev => prev.map(m =>
         m.id === asstId
           ? { ...m, content: m.content || `Connection error: ${err.message}`, streaming: false }
@@ -335,12 +323,10 @@ export default function Chat() {
       ))
     } finally {
       setIsStreaming(false)
-      setMessages(prev => prev.map(m =>
-        m.id === asstId ? { ...m, streaming: false } : m
-      ))
+      streamBuf.flushAll()
       setTimeout(() => inputRef.current?.focus(), 50)
     }
-  }, [isStreaming, threadId, getToken, fetchConversations])
+  }, [isStreaming, threadId, getToken, fetchConversations, streamBuf])
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
