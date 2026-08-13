@@ -35,6 +35,7 @@ from agents.marketing.graph import marketing_agent
 from agents.finance.graph import finance_agent
 from agents.research.graph import research_agent
 from agents.supplier.graph import supplier_agent
+from agents.customer_support.graph import customer_support_agent
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ async def build_supervisor(brand_id: str, brand_name: str):
         name          = f"fashionos-{brand_id}",
         model         = mistral,
         system_prompt = build_prompt(brand_id, brand_name),
-        subagents     = [inventory_agent, sales_agent, marketing_agent, finance_agent, research_agent, supplier_agent],
+        subagents     = [inventory_agent, sales_agent, marketing_agent, finance_agent, research_agent, supplier_agent, customer_support_agent],
         backend       = backend,
         store         = store,
         memory        = ["/memories/AGENTS.md"],

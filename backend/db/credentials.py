@@ -70,6 +70,10 @@ class BrandCredentials:
         # Instagram DMs — brand-specific
         "instagram_access_token",
         "instagram_page_id",
+        # Courier / delivery tracking — Customer Support Agent
+        "courier_provider",
+        "courier_api_key",
+        "courier_account_id",
         # Notification recipients — where to SEND alerts for this brand
         "brand_owner_whatsapp",
         "brand_owner_email",

@@ -274,6 +274,53 @@ async def publish_instagram_post(brand_id: str, image_url: str, caption: str) ->
     }
 
 
+@mcp.tool()
+async def send_instagram_dm(brand_id: str, recipient_ig_id: str, message: str) -> dict:
+    """
+    Send a direct message to a customer on Instagram, via the connected
+    Instagram Business account.
+
+    Args:
+        brand_id:        The ID of the brand to query.
+        recipient_ig_id: The customer's Instagram-scoped ID (IGSID) — this
+                          is the external_thread_id for an 'instagram'
+                          channel support conversation, captured when their
+                          inbound DM webhook first arrived.
+        message:          The reply text to send.
+
+    Used by: Customer Support Agent (resolving/replying to Instagram DM
+    conversations — the equivalent of send_customer_message for WhatsApp/
+    email, but Instagram's Messaging API is a distinct Graph API surface
+    from the Content Publishing API publish_instagram_post uses, hence a
+    separate tool here rather than folding into that one).
+    """
+    try:
+        creds = await _get_brand_creds(brand_id)
+    except ValueError as e:
+        logger.error("Meta credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+
+    ig_user_id = creds.get("instagram_page_id")
+    token = creds.get("instagram_access_token")
+    if not ig_user_id or not token:
+        return {"error": "Instagram not connected for this brand."}
+
+    try:
+        result = await _graph_post(
+            f"{ig_user_id}/messages", token,
+            {"recipient": f'{{"id":"{recipient_ig_id}"}}', "message": f'{{"text":"{message}"}}'},
+        )
+    except httpx.HTTPStatusError as e:
+        logger.error("Meta API HTTP error sending Instagram DM: %s", e.response.text)
+        return {"error": f"Instagram DM send failed: {e.response.text}"}
+
+    return {
+        "success": True,
+        "recipient_ig_id": recipient_ig_id,
+        "message_id": result.get("message_id"),
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+    }
+
 # ── META ADS — READ ──────────────────────────────────────────────────────────
 
 @mcp.tool()

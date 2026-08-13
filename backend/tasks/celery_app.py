@@ -55,4 +55,8 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.finance_tasks.run_finance_agent_for_all_brands",
         "schedule": crontab(hour=6, minute=45),  # 06:45 UTC — after sales & marketing, so it reads fresh insights/spend
     },
+    "customer-support-escalation-sweep": {
+        "task": "tasks.customer_support_tasks.run_escalation_review_for_all_brands",
+        "schedule": crontab(minute="*/30"),  # every 30 min — stale open tickets shouldn't silently rot
+    },
 }

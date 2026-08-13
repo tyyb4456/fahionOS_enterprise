@@ -208,6 +208,11 @@ async def _sync_customer(session: AsyncSession, brand_id: str, customer_payload:
     customer.last_name = customer_payload.get("last_name") or customer.last_name
     customer.country = address.get("country") or customer.country
     customer.city = address.get("city") or customer.city
+    # Added for Customer Support Agent — matches inbound WhatsApp senders
+    # to this customer. Numbers arrive in varying formats across Shopify/
+    # WhatsApp, so get_customer_profile's lookup is a fuzzy ilike match,
+    # not exact E.164 normalization.
+    customer.phone = customer_payload.get("phone") or address.get("phone") or customer.phone
     # Shopify's own running totals win when present — more accurate than us
     # re-deriving them from whichever orders happen to have hit our webhook.
     customer.orders_count = customer_payload.get("orders_count", customer.orders_count)

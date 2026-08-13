@@ -723,6 +723,160 @@ async def get_abandoned_checkouts(brand_id: str, hours: int = 24) -> list[dict]:
         })
     return checkouts
 
+@mcp.tool()
+async def get_order_by_id(brand_id: str, order_id: str) -> dict:
+    """
+    Fetch full detail for one order by its Shopify order_id — line items,
+    fulfillment/tracking, shipping address, financial status.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        order_id: Shopify order_id (numeric, as a string is fine).
+
+    Used by: Customer Support Agent — the primary "find this customer's
+    order" lookup, richer than get_recent_orders (which is time-windowed
+    and doesn't include shipping address / tracking).
+    """
+    try:
+        data = await _shopify_get(brand_id, f"orders/{order_id}.json", {
+            "fields": "id,created_at,financial_status,fulfillment_status,total_price,"
+                      "line_items,shipping_address,customer,fulfillments"
+        })
+    except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+    except httpx.HTTPStatusError as e:
+        logger.error("Shopify API HTTP error fetching order %s: %s", order_id, e.response.text)
+        return {"error": f"Order lookup failed: {e.response.text}"}
+
+    o = data.get("order")
+    if not o:
+        return {"error": f"No order '{order_id}' found for this brand."}
+
+    fulfillments = o.get("fulfillments", [])
+    tracking_number = fulfillments[0].get("tracking_number") if fulfillments else None
+    tracking_company = fulfillments[0].get("tracking_company") if fulfillments else None
+
+    return {
+        "order_id": o["id"],
+        "created_at": o.get("created_at"),
+        "financial_status": o.get("financial_status"),
+        "fulfillment_status": o.get("fulfillment_status"),
+        "total_price": float(o.get("total_price") or 0),
+        "shipping_address": o.get("shipping_address"),
+        "tracking_number": tracking_number,
+        "tracking_company": tracking_company,
+        "line_items": [
+            {
+                "line_item_id": item.get("id"), "product_id": item.get("product_id"),
+                "variant_id": item.get("variant_id"), "sku": item.get("sku", ""),
+                "name": item.get("name", ""), "quantity": item["quantity"],
+                "price": float(item["price"]),
+            }
+            for item in o.get("line_items", [])
+        ],
+    }
+
+
+@mcp.tool()
+async def create_refund(
+    brand_id: str,
+    order_id: str,
+    line_item_id: int,
+    quantity: int,
+    amount: float,
+    reason: str,
+    restock: bool = True,
+) -> dict:
+    """
+    Issue a real refund on a Shopify order — actual money returned to the
+    customer's original payment method.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        order_id: Shopify order_id.
+        line_item_id: The specific line item being refunded (from get_order_by_id).
+        quantity: Units being refunded.
+        amount: The exact refund amount (in the store's currency) — compute
+                this with calculate_refund_amount first, don't guess it.
+        reason: Why — stored in Shopify's own audit log.
+        restock: Whether to return the units to sellable inventory (default True).
+
+    Returns the Shopify refund id. This is real money — only call after
+    confirming eligibility and the amount.
+    Used by: Customer Support Agent (refund resolution — pair with the
+    internal record_refund tool right after this succeeds).
+    """
+    payload = {
+        "refund": {
+            "notify": True,
+            "note": reason,
+            "refund_line_items": [
+                {"line_item_id": line_item_id, "quantity": quantity, "restock_type": "return" if restock else "no_restock"}
+            ],
+            "transactions": [
+                {"amount": str(amount), "kind": "refund", "gateway": "manual"}
+            ],
+        }
+    }
+    try:
+        result = await _shopify_post(brand_id, f"orders/{order_id}/refunds.json", payload)
+    except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+    except httpx.HTTPStatusError as e:
+        logger.error("Shopify API HTTP error creating refund for order %s: %s", order_id, e.response.text)
+        return {"error": f"Refund failed: {e.response.text}"}
+
+    refund = result.get("refund", {})
+    return {
+        "success": True,
+        "shopify_refund_id": refund.get("id"),
+        "order_id": order_id,
+        "amount": amount,
+        "reason": reason,
+        "created_at": refund.get("created_at"),
+    }
+
+
+@mcp.tool()
+async def cancel_order(brand_id: str, order_id: str, reason: str, notify_customer: bool = True) -> dict:
+    """
+    Cancel an order that hasn't shipped yet.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        order_id: Shopify order_id.
+        reason: Shopify's expected values — "customer", "fraud", "inventory",
+                "declined", or "other".
+        notify_customer: Whether Shopify sends the customer a cancellation email.
+
+    Only call this for unfulfilled orders — check fulfillment_status via
+    get_order_by_id first. An already-shipped order needs a return, not a
+    cancellation.
+    Used by: Customer Support Agent (cancellation requests caught before dispatch).
+    """
+    valid_reasons = {"customer", "fraud", "inventory", "declined", "other"}
+    if reason not in valid_reasons:
+        reason = "customer"
+
+    try:
+        result = await _shopify_post(brand_id, f"orders/{order_id}/cancel.json", {
+            "reason": reason, "email": notify_customer,
+        })
+    except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+    except httpx.HTTPStatusError as e:
+        logger.error("Shopify API HTTP error cancelling order %s: %s", order_id, e.response.text)
+        return {"error": f"Cancellation failed: {e.response.text}"}
+
+    o = result.get("order", {})
+    return {
+        "success": True, "order_id": order_id,
+        "cancelled_at": o.get("cancelled_at"), "reason": reason,
+    }
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

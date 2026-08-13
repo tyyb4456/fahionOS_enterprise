@@ -28,8 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_brand
 from db.credentials import (
-    BrandCredentials, cache_brand_credentials,
-    decrypt_value, encrypt_value,
+    cache_brand_credentials,
+    encrypt_value,
 )
 from db.models import Brand
 from db.session import get_session
@@ -100,18 +100,16 @@ async def _get_state(state: str) -> str | None:
 # ── Credential sync helper ─────────────────────────────────────────────────────
 
 async def _sync_creds(brand: Brand) -> None:
-    """Decrypt all brand credentials and push to Redis for MCP servers."""
-    await cache_brand_credentials(brand.brand_id, BrandCredentials(
-        shopify_shop_name      = brand.shopify_shop_name or "",
-        shopify_access_token   = decrypt_value(brand.shopify_access_token_enc   or ""),
-        shopify_webhook_secret = decrypt_value(brand.shopify_webhook_secret_enc or ""),
-        meta_access_token      = decrypt_value(brand.meta_access_token_enc      or ""),
-        meta_ad_account_id     = brand.meta_ad_account_id or "",
-        instagram_access_token = decrypt_value(brand.instagram_access_token_enc or ""),
-        instagram_page_id      = brand.instagram_page_id or "",
-        brand_owner_whatsapp   = brand.brand_owner_whatsapp or "",
-        brand_owner_email      = brand.brand_owner_email or "",
-    ))
+    """Decrypt all brand credentials and push to Redis for MCP servers.
+    Delegates to brands.py's build_brand_credentials so this always
+    reflects every credential type (Shopify/Meta/courier/...), not just
+    the ones this particular OAuth flow itself touches — see that
+    function's docstring for why reconstructing the blob independently
+    here was a real risk. Local import avoids a load-time cycle: brands.py
+    already imports from this module (revoke_meta_token /
+    unregister_shopify_webhooks)."""
+    from api.routers.brands import build_brand_credentials  # local import avoids a load-time cycle
+    await cache_brand_credentials(brand.brand_id, build_brand_credentials(brand))
 
 
 # ── Shopify webhook helpers ─────────────────────────────────────────────────────

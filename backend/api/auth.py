@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Brand
 from db.session import get_session
+from db.support_email import generate_support_inbound_email
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ async def _provision_brand(
         clerk_user_id = clerk_user_id,
         plan          = "starter",
         is_active     = True,
+        support_inbound_email = generate_support_inbound_email(brand_id),
     )
     session.add(brand)
     try:
@@ -158,4 +160,4 @@ def require_admin(
     if x_admin_secret != ADMIN_SECRET:
         logger.error("Admin request failed: Invalid admin secret provided")
         raise HTTPException(403, "Invalid admin secret.")
-    logger.info("Admin authentication successful")
+    logger.info("Admin authentication successful")

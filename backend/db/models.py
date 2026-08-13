@@ -79,11 +79,41 @@ class Brand(Base):
 
     # Instagram DMs
     instagram_access_token_enc: Mapped[Optional[str]] = mapped_column(Text,        nullable=True)
-    instagram_page_id:          Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Unique — now doubles as a webhook-routing lookup key (see
+    # api/routers/customer_support_webhook.py), not just a credential.
+    instagram_page_id:          Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
+
+    # WhatsApp Business — Customer Support Agent inbound routing + the FROM
+    # number for outbound replies. No in-app OAuth flow exists for WhatsApp
+    # Business Platform yet (Embedded Signup is a separate initiative) — a
+    # brand connects their own number under FashionOS's tech-provider WABA
+    # setup in Meta Business Manager themselves, then enters the resulting
+    # phone_number_id here via PUT /api/v1/brands/me. Not a secret — same
+    # tier as instagram_page_id, just an identifier, not a token.
+    whatsapp_phone_number_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
+
+    # Customer Support Agent — courier/delivery tracking integration.
+    # API-key based (no OAuth flow exists for these providers), so this is
+    # simple encrypted credential storage via api/routers/courier.py, not
+    # an OAuth callback like Shopify/Meta. courier_provider/account_id
+    # aren't secret; only the API key is encrypted.
+    courier_provider:    Mapped[Optional[str]] = mapped_column(String(50), nullable=True)   # "postex" | "leopards"
+    courier_api_key_enc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    courier_account_id:  Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Notification recipients (WHERE to send — brand owner's contacts)
     brand_owner_whatsapp: Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)
     brand_owner_email:    Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # Customer Support Agent — dedicated inbound email alias for this
+    # brand under our shared SendGrid Inbound Parse domain (plus-addressed,
+    # e.g. support+brand_xxx@support.fashionos.app — one shared inbound
+    # domain/MX record for the whole platform, no per-brand SendGrid
+    # config needed). Set at provisioning (see db/support_email.py); used
+    # both to route inbound parse webhooks to the right brand and as the
+    # reply_to on outbound support emails so a customer's "Reply" lands
+    # back here instead of at SENDGRID_FROM_EMAIL, which isn't monitored.
+    support_inbound_email: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -212,6 +242,10 @@ class Customer(Base):
     last_name:           Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     country:             Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     city:                Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Added for Customer Support Agent — matches inbound WhatsApp senders
+    # to a known customer. Shopify's customer payload carries this; see
+    # api/routers/shopify_webhook.py::_sync_customer.
+    phone:               Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     orders_count:        Mapped[int]       = mapped_column(Integer, nullable=False, default=0)
     total_spent:         Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
     first_order_at:      Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -801,3 +835,120 @@ class SupplierInsight(Base):
     message:     Mapped[str]       = mapped_column(Text, nullable=False, default="")
     confidence:  Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
     created_at:  Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Customer Support Agent — conversations, tickets, and resolution actions
+# across every customer channel (WhatsApp, Instagram DM, email, website
+# chat). SupportInsight is the routine, always-attempted analytical output
+# (mirrors Inventory's alerts / Sales's insights). RefundRecord/
+# ExchangeRecord are the operational-write tables that make refunds/
+# exchanges real, auditable actions rather than just text in a ticket's
+# resolution field — same role as Inventory's PurchaseOrder or Finance's
+# Expense.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SupportConversation(Base):
+    __tablename__ = "support_conversations"
+
+    id:                  Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:            Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    shopify_customer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    channel:             Mapped[str]       = mapped_column(String(20), nullable=False)  # whatsapp|instagram|email|webchat
+    external_thread_id:  Mapped[str]       = mapped_column(String(255), nullable=False)  # phone / IGSID / email / session id
+    status:              Mapped[str]       = mapped_column(String(20), nullable=False, default="open")  # open|closed
+    started_at:          Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_message_at:     Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    closed_at:           Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id:              Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:        Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("support_conversations.id"), nullable=False, index=True)
+    sender:          Mapped[str]       = mapped_column(String(20), nullable=False)  # customer|agent
+    content:         Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at:      Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id:                  Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:            Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    conversation_id:     Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("support_conversations.id"), nullable=True)
+    shopify_customer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    shopify_order_id:    Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    issue_type:          Mapped[str]       = mapped_column(String(50), nullable=False, default="other")
+    # order_status|delivery_issue|return|exchange|refund|product_question|complaint|other
+    priority:            Mapped[str]       = mapped_column(String(20), nullable=False, default="normal")  # low|normal|high|critical
+    status:              Mapped[str]       = mapped_column(String(20), nullable=False, default="open")
+    # open|in_progress|resolved|escalated|closed
+    resolution:          Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    created_at:          Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at:          Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SupportAction(Base):
+    __tablename__ = "support_actions"
+
+    id:          Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:    Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    ticket_id:   Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("support_tickets.id"), nullable=False, index=True)
+    action_type: Mapped[str]       = mapped_column(String(50), nullable=False)
+    # REFUND_ISSUED|EXCHANGE_CREATED|STATUS_RESOLVED|STATUS_ESCALATED|...
+    result:      Mapped[dict]      = mapped_column(JSON, nullable=False, default=dict)
+    created_at:  Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class RefundRecord(Base):
+    __tablename__ = "refund_records"
+
+    id:                Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:          Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    ticket_id:         Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("support_tickets.id"), nullable=True)
+    shopify_order_id:  Mapped[int]       = mapped_column(BigInteger, nullable=False)
+    amount:            Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    reason:            Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    shopify_refund_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    status:            Mapped[str]       = mapped_column(String(20), nullable=False, default="issued")  # issued|pending_approval|failed
+    created_at:        Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ExchangeRecord(Base):
+    __tablename__ = "exchange_records"
+
+    id:               Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:         Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    ticket_id:        Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("support_tickets.id"), nullable=True)
+    shopify_order_id: Mapped[int]       = mapped_column(BigInteger, nullable=False)
+    original_sku:     Mapped[str]       = mapped_column(String(255), nullable=False)
+    new_sku:          Mapped[str]       = mapped_column(String(255), nullable=False)
+    status:           Mapped[str]       = mapped_column(String(20), nullable=False, default="pending")  # pending|shipped|completed|failed
+    created_at:       Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CustomerFeedback(Base):
+    __tablename__ = "customer_feedback"
+
+    id:                  Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:            Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    shopify_customer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    sentiment:           Mapped[str]       = mapped_column(String(20), nullable=False, default="mixed")  # positive|mixed|negative
+    feedback:            Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    category:            Mapped[str]       = mapped_column(String(50), nullable=False, default="general")
+    created_at:          Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SupportInsight(Base):
+    __tablename__ = "support_insights"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    category:   Mapped[str]       = mapped_column(String(50), nullable=False, default="pattern")  # pattern|product|delivery|policy|churn_risk
+    severity:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")
+    message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
