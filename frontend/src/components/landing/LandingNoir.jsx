@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, SignInButton } from '@clerk/clerk-react'
-import { Sparkles, ArrowRight, ArrowDown, ChevronRight, ChevronLeft, CheckCircle2, Zap, Menu, X } from 'lucide-react'
-import { agents, howItWorksSteps, integrations, marqueeItems } from './LandingData.jsx'
+import { Sparkles, ArrowRight, ArrowDown, ChevronRight, ChevronLeft, CheckCircle2, Zap, Menu, X, Brain } from 'lucide-react'
+import { agents, howItWorksSteps, integrations, marqueeItems, supervisor, officePods } from './LandingData.jsx'
 
 const GOLD = '#d4d4d8'
 const BG = '#1e1e1e'
@@ -216,8 +216,9 @@ export default function LandingNoir() {
         <div className="hidden min-[901px]:flex gap-10 text-[0.72rem] uppercase tracking-[0.2em] text-[#f0eeeb]/55">
           {[
             { href: '#agents', label: 'Atelier', num: '01' },
-            { href: '#integrations', label: 'Connectivity', num: '02' },
-            { href: '#process', label: 'Method', num: '03' },
+            { href: '#command', label: 'Command', num: '02' },
+            { href: '#integrations', label: 'Connectivity', num: '03' },
+            { href: '#process', label: 'Method', num: '04' },
           ].map(link => (
             <a key={link.href} href={link.href} className="group relative no-underline text-inherit transition-colors duration-300 cursor-pointer font-medium hover:text-[#d4d4d8] py-1">
               <span className="text-[#f0eeeb]/30 mr-1.5 font-mono tracking-normal transition-colors duration-300 group-hover:text-[#d4d4d8]/60">{link.num}</span>
@@ -260,8 +261,9 @@ export default function LandingNoir() {
         <div className="flex flex-col px-6 py-6 gap-1">
           {[
             { href: '#agents', label: 'Atelier', num: '01' },
-            { href: '#integrations', label: 'Connectivity', num: '02' },
-            { href: '#process', label: 'Method', num: '03' },
+            { href: '#command', label: 'Command', num: '02' },
+            { href: '#integrations', label: 'Connectivity', num: '03' },
+            { href: '#process', label: 'Method', num: '04' },
           ].map(link => (
             <a
               key={link.href}
@@ -299,7 +301,7 @@ export default function LandingNoir() {
           </h1>
 
           <p className="text-[1.05rem] font-light leading-[1.8] text-[#f2ede4]/65 max-w-120 mb-12">
-            Eight elite AI agents work in symphony to automate inventory, markdown pricing, content generation, meta campaigns, and customer DMs. Supervised by LangGraph, approved by you.
+            Seven autonomous agents run your store end-to-end — inventory, sales, marketing, finance, research, procurement, and customer support — planned by an AI supervisor, guarded by your own brand policies.
           </p>
 
           <div className="flex items-center gap-4 sm:gap-7 flex-wrap">
@@ -349,9 +351,9 @@ export default function LandingNoir() {
           {/* Stat bar */}
           <div className="absolute bottom-12 left-12 z-5 flex items-stretch bg-[#1e1e1e]/52 backdrop-blur-[20px] backdrop-saturate-140 border border-[#d4d4d8]/20 rounded-[14px] overflow-hidden divide-x divide-[#d4d4d8]/15 reveal-on-scroll reveal-delay-2">
             {[
-              { label: 'Agents', val: '8' },
+              { label: 'Agents', val: '7' },
               { label: 'Uptime', val: '24/7' },
-              { label: 'Auto', val: '<15%' },
+              { label: 'Channels', val: '4' },
             ].map(s => (
               <div key={s.label} className="py-4 px-6.5 flex flex-col gap-1.25">
                 <span className="text-[0.58rem] uppercase tracking-[0.18em] text-[#f0eeeb]/45">{s.label}</span>
@@ -385,7 +387,7 @@ export default function LandingNoir() {
           <div className="mb-16 reveal-on-scroll">
             <div className="font-cormorant text-[clamp(2.8rem,4.8vw,4.8rem)] font-light leading-[1.05] m-[0_0_20px] text-[#f0eeeb]">The <em className="text-[#d4d4d8] italic font-normal">Atelier</em></div>
             <p className="text-[1.02rem] font-light leading-[1.8] text-[#f0eeeb]/60 max-w-[580px] m-0">
-              Eight specialized agents operating in a sequenced pipeline managed by LangGraph. High-risk actions route to approvals, safe operations run autonomously.
+              Seven specialized operators, each running its own LangGraph pipeline and taking real action on your store — all planned and chained by a single AI supervisor.
             </p>
           </div>
 
@@ -433,11 +435,16 @@ export default function LandingNoir() {
                                 {agent.desc}
                               </p>
                               <div className="relative z-[1] mt-6 flex items-center gap-2">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${agent.autoExec ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${agent.mode === 'autonomous' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                                 <span className="text-[0.6rem] uppercase tracking-[0.14em] text-[#f0eeeb]/40 font-medium">
-                                  {agent.autoExec ? 'Autonomous' : 'Requires Approval'}
+                                  {agent.mode === 'autonomous' ? 'Autonomous' : 'Guardrailed'}
                                 </span>
                               </div>
+                              {agent.exec && (
+                                <div className="relative z-[1] mt-2.5 text-[0.6rem] font-mono tracking-[0.04em] text-[#f0eeeb]/30">
+                                  {agent.exec}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )
@@ -509,11 +516,16 @@ export default function LandingNoir() {
                             {agent.desc}
                           </p>
                           <div className="relative z-[1] mt-6 flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${agent.autoExec ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${agent.mode === 'autonomous' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                             <span className="text-[0.6rem] uppercase tracking-[0.14em] text-[#f0eeeb]/40 font-medium">
-                              {agent.autoExec ? 'Autonomous' : 'Requires Approval'}
+                              {agent.mode === 'autonomous' ? 'Autonomous' : 'Guardrailed'}
                             </span>
                           </div>
+                          {agent.exec && (
+                            <div className="relative z-[1] mt-2.5 text-[0.6rem] font-mono tracking-[0.04em] text-[#f0eeeb]/30">
+                              {agent.exec}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -549,13 +561,105 @@ export default function LandingNoir() {
         </div>
       </div>
 
+      {/* ── Command Center (Supervisor + Virtual Office) ──────── */}
+      <div id="command" className="border-b border-[#d4d4d8]/8 bg-[#1e1e1e]">
+        <div className="py-16 px-5 sm:py-[88px] sm:px-10 lg:py-[120px] lg:px-20 max-w-[1360px] mx-auto relative z-[2]">
+          <div className="mb-16 reveal-on-scroll">
+            <div className="font-cormorant text-[clamp(2.8rem,4.8vw,4.8rem)] font-light leading-[1.05] m-[0_0_20px] text-[#f0eeeb]">The <em className="text-[#d4d4d8] italic font-normal">Command Center</em></div>
+            <p className="text-[1.02rem] font-light leading-[1.8] text-[#f0eeeb]/60 max-w-[580px] m-0">
+              One AI supervisor. Seven operators. A living office where the whole team works in real time.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center reveal-on-scroll">
+            {/* Left: supervisor copy */}
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <Brain size={18} className="text-[#d4d4d8]" />
+                <span className="font-montserrat text-[0.62rem] tracking-[0.22em] uppercase text-[#f0eeeb]/35">Deep Agent · LangGraph</span>
+              </div>
+              <div className="font-cormorant text-[1.8rem] text-[#f0eeeb] font-bold mb-2">{supervisor.title}</div>
+              <div className="font-montserrat text-[0.6rem] tracking-[0.2em] uppercase text-[#f0eeeb]/30 mb-4">{supervisor.role}</div>
+              <p className="text-[0.92rem] font-light leading-[1.8] text-[#f2ede4]/55 mb-6">
+                {supervisor.desc}
+              </p>
+              <ul className="flex flex-col gap-3 mb-8">
+                {supervisor.bullets.map((b, i) => (
+                  <li key={i} className="flex items-start gap-3 text-[0.85rem] text-[#f0eeeb]/65">
+                    <CheckCircle2 size={15} className="text-[#d4d4d8] shrink-0 mt-0.5" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {isSignedIn ? (
+                <button
+                  className="py-3.5 px-8 border border-[#d4d4d8]/55 rounded-[6px] text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.22em] uppercase cursor-pointer transition-all duration-200 inline-flex items-center gap-2.5 hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white"
+                  onClick={() => navigate('/office')}
+                >
+                  Enter the Office
+                  <ArrowRight size={15} />
+                </button>
+              ) : (
+                <SignInButton mode="modal">
+                  <button className="py-3.5 px-8 border border-[#d4d4d8]/55 rounded-[6px] text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.22em] uppercase cursor-pointer transition-all duration-200 inline-flex items-center gap-2.5 hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white">
+                    Enter the Office
+                    <ArrowRight size={15} />
+                  </button>
+                </SignInButton>
+              )}
+            </div>
+
+            {/* Right: floor plan */}
+            <div className="relative rounded-2xl bg-[#1c1c1c] border border-[#d4d4d8]/14 shadow-[0_16px_40px_rgba(0,0,0,0.35)] p-6 sm:p-8">
+              {/* Supervisor glass office */}
+              <div className="rounded-xl border border-[#d4d4d8]/25 bg-[#d4d4d8]/[0.04] p-5 mb-5 flex items-center justify-between">
+                <div>
+                  <div className="font-cormorant text-[1.25rem] text-[#f0eeeb] font-bold">{supervisor.title}</div>
+                  <div className="text-[0.58rem] uppercase tracking-[0.18em] text-[#f0eeeb]/35 mt-0.5">{supervisor.role}</div>
+                </div>
+                <span className="w-2 h-2 rounded-full bg-[#d4d4d8] shadow-[0_0_10px_rgba(212,212,216,0.7)]" />
+              </div>
+
+              {/* Agent pods */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {officePods.map(pod => (
+                  <div key={pod.name} className="rounded-xl border border-[#d4d4d8]/10 bg-[#1a1a1a] p-4">
+                    <div className="font-cormorant text-[1.05rem] text-[#f0eeeb] mb-0.5">{pod.name}</div>
+                    <div className="text-[0.55rem] uppercase tracking-[0.16em] text-[#f0eeeb]/30 mb-3">{pod.blurb}</div>
+                    <div className="flex flex-col gap-2">
+                      {pod.desks.map(d => (
+                        <div key={d.label} className="flex items-center justify-between rounded-lg border border-[#d4d4d8]/8 bg-[#161616] px-3 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: d.color }} />
+                            <div>
+                              <div className="text-[0.72rem] text-[#f0eeeb] font-medium leading-tight">{d.label}</div>
+                              <div className="text-[0.52rem] uppercase tracking-[0.14em] text-[#f0eeeb]/30 leading-tight">{d.role}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Break room strip */}
+              <div className="mt-5 rounded-lg border border-dashed border-[#d4d4d8]/12 px-4 py-3 text-center text-[0.6rem] uppercase tracking-[0.2em] text-[#f0eeeb]/30">
+                Break Room · Live agent activity streams in via SSE
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Integrations ("Seamless Connectivity") ──────── */}
       <div id="integrations" className="border-b border-[#d4d4d8]/8 bg-[#1e1e1e]">
         <div className="py-16 px-5 sm:py-[88px] sm:px-10 lg:py-[120px] lg:px-20 max-w-[1360px] mx-auto relative z-[2]">
           <div className="mb-16 reveal-on-scroll">
             <div className="font-cormorant text-[clamp(2.8rem,4.8vw,4.8rem)] font-light leading-[1.05] m-[0_0_20px] text-[#f0eeeb]">Seamless <em className="text-[#d4d4d8] italic font-normal">Connectivity</em></div>
             <p className="text-[1.02rem] font-light leading-[1.8] text-[#f0eeeb]/55 max-w-[580px] m-0">
-              Your existing operations linked with read & write capabilities. Integrated directly via secure platform MCP clients.
+              Real read-write connections to your stack — agents don't just watch, they operate: orders, posts, campaigns, refunds, and support across your channels.
             </p>
           </div>
 
@@ -665,15 +769,15 @@ export default function LandingNoir() {
           <em className="text-[#d4d4d8] italic font-normal">Without Losing Control</em>
         </div>
         <p className="text-[1.05rem] font-light text-[#f0eeeb]/55 mb-14 relative z-[1] reveal-on-scroll reveal-delay-1">
-          Zero coding required. Safe threshold validation safeguards your profit margins while automating day-to-day operations.
+          Zero coding required. Seven agents execute real work on your store — every high-risk move checked by the Finance agent and reported straight to you.
         </p>
 
         <div className="flex gap-8 flex-wrap justify-center mb-14 relative z-[1] max-[640px]:flex-col max-[640px]:items-center max-[640px]:gap-3 reveal-on-scroll reveal-delay-2">
           {[
-            'Shopify & Meta Ads Native Integration',
-            'WhatsApp Real-time Notifications',
-            'Multi-agent Coordination Layer',
-            'Symmetrical Safety Approval Queue',
+            'Shopify & Meta read-write integration',
+            'AI Supervisor with long-term brand memory',
+            'Guardrailed real actions with Finance sign-off',
+            'WhatsApp + Instagram + email + webchat support',
           ].map(item => (
             <div key={item} className="flex items-center gap-2.5 text-[0.85rem] text-[#f0eeeb]/60">
               <CheckCircle2 size={16} className="text-[#d4d4d8] shrink-0" />

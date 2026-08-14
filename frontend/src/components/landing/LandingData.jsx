@@ -1,204 +1,197 @@
 import {
-  Package, TrendingUp, DollarSign, RotateCcw,
-  Megaphone, MessageCircle, RefreshCw, Brain,
+  Package, TrendingUp, Megaphone, Wallet, Search, Truck, MessageCircle,
 } from 'lucide-react'
 import {
   SiMeta, SiInstagram, SiFacebook, SiWhatsapp,
   SiShopify, SiGoogle, SiTiktok, SiRedis,
 } from '@icons-pack/react-simple-icons'
 
-// ── 8 agents in exact pipeline execution order ───────────────────────────────
+// ── 7 agents, as deployed in the backend, in supervisor delegation order ──────
+// `mode`: 'autonomous' — acts on its own with guardrails · 'guarded' — records and
+// advises; high-stakes changes are checked with Finance / escalated to the founder.
 export const agents = [
   {
     step: '01',
     icon: Package,
     title: 'Inventory',
-    badge: 'inventory-agent',
-    desc: 'Real-time Shopify stock sweep. Flags critical stockouts, velocity anomalies, dead stock (45+ days), and size distribution issues specific to Pakistani fashion.',
-    color: '#ADDFF1',
-    autoExec: true,
+    badge: 'inventory_agent',
+    desc: 'Forecasts SKU demand and days-to-stockout, flags stockout & overstock risk, and computes safety stock and reorder quantities. Places real purchase orders, notifies suppliers, and corrects Shopify stock levels.',
+    exec: 'Purchase orders · Supplier alerts · Stock correction',
+    color: '#22c55e',
+    mode: 'autonomous',
   },
   {
     step: '02',
     icon: TrendingUp,
-    title: 'Trend',
-    badge: 'trend-agent',
-    desc: 'Apify scrapes TikTok & Instagram hashtags (#PakistaniFashion, #FashionTikTokPK). Google Trends via Pytrends cross-references catalog SKUs. Runs before Pricing so signals are ready.',
-    color: '#9dd6ed',
-    autoExec: true,
+    title: 'Sales',
+    badge: 'sales_agent',
+    desc: 'The brand\'s Chief Revenue Officer. Computes KPIs, confirms anomalies statistically, forecasts revenue, ranks products, and segments customers. Root-causes revenue shifts and creates real Shopify discount codes.',
+    exec: 'Discount codes · Revenue forecasts · Segmenting',
+    color: '#60a5fa',
+    mode: 'autonomous',
   },
   {
     step: '03',
-    icon: DollarSign,
-    title: 'Pricing',
-    badge: 'pricing-agent',
-    desc: 'Automated markdown and surge pricing in PKR. Auto-executes changes under 15% directly via Shopify MCP. Anything above goes to your Approvals queue.',
-    color: '#ADDFF1',
-    autoExec: false,
-    threshold: '<15% auto',
+    icon: Megaphone,
+    title: 'Marketing',
+    badge: 'marketing_agent',
+    desc: 'The CMO. Plans and launches campaigns, ranks target audiences, picks best posting times, and generates on-brand copy. Publishes Instagram posts and launches Meta Ads — never promoting out-of-stock items.',
+    exec: 'Instagram posts · Meta Ads · Content scheduling',
+    color: '#f97316',
+    mode: 'autonomous',
   },
   {
     step: '04',
-    icon: RefreshCw,
-    title: 'Restock',
-    badge: 'restock-agent',
-    desc: 'Predicts days-of-stock for each SKU using velocity data. Generates supplier messages for Lahore/Faisalabad mills with lead times built in. Sends WhatsApp on approval.',
-    color: '#9dd6ed',
-    autoExec: false,
+    icon: Wallet,
+    title: 'Finance',
+    badge: 'finance_agent',
+    desc: 'The CFO. Computes real profit and margin, forecasts cash, ranks products by actual cost, and checks purchase-order affordability. Logs expenses, issues budget recommendations, and flags financial risk.',
+    exec: 'Budget sign-off · Expense ledger · Risk flags',
+    color: '#facc15',
+    mode: 'guarded',
   },
   {
     step: '05',
-    icon: MessageCircle,
-    title: 'Content',
-    badge: 'content-agent',
-    desc: 'Generates Instagram captions and TikTok scripts in Urdu-English mix, timed to PST peak hours. Trending SKUs get urgent posts. Posts directly to your feed after approval.',
-    color: '#ADDFF1',
-    autoExec: false,
+    icon: Search,
+    title: 'Research',
+    badge: 'research_agent',
+    desc: 'Head of Market Intelligence. Monitors the outside world — trends, competitors, pricing, public sentiment — via web search and news coverage. Records verified opportunities and never overclaims.',
+    exec: 'Trend intel · Competitor scans · Opportunity records',
+    color: '#a855f7',
+    mode: 'guarded',
   },
   {
     step: '06',
-    icon: RotateCcw,
-    title: 'Returns',
-    badge: 'returns-agent',
-    desc: 'Detects return patterns by SKU and reason (sizing, quality, mismatch). Surfaces structured insights with fix_type recommendations — update size guides, photos, or descriptions.',
-    color: '#9dd6ed',
-    autoExec: true,
+    icon: Truck,
+    title: 'Supplier',
+    badge: 'supplier_agent',
+    desc: 'Procurement & supply chain. Finds and scores suppliers, requests and compares quotes, negotiates terms, places purchase orders, tracks shipments, and updates reliability from real delivery outcomes.',
+    exec: 'Quotes · Purchase orders · Shipment tracking',
+    color: '#38bdf8',
+    mode: 'autonomous',
   },
   {
     step: '07',
-    icon: Megaphone,
-    title: 'Marketing',
-    badge: 'marketing-agent',
-    desc: 'Monitors Meta campaign ROAS and CPM. Auto-pauses underperformers and decreases budgets. Budget increases and activations need your sign-off — synced with pricing clearance flags.',
-    color: '#ADDFF1',
-    autoExec: false,
-  },
-  {
-    step: '08',
     icon: MessageCircle,
-    title: 'DM',
-    badge: 'dm-agent',
-    desc: 'Polls Facebook Page & Instagram DMs. Classifies bulk inquiries, complaints, and compliments. Drafts replies and routes urgent threads to your review queue.',
-    color: '#9dd6ed',
-    autoExec: true,
+    title: 'Customer Support',
+    badge: 'customer_support_agent',
+    desc: 'AI Customer Success Manager. Resolves real issues on WhatsApp, Instagram DM, email, and webchat — order status, returns, exchanges, refunds, cancellations — under the brand\'s actual policy, escalating past safe limits.',
+    exec: 'Refunds · Exchanges · Tickets · 4 channels',
+    color: '#34d399',
+    mode: 'guarded',
   },
 ]
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 export const stats = [
-  { value: '8',   label: 'Specialized Agents', suffix: '' },
-  { value: '24',  label: 'Hour Automation',     suffix: '/7' },
-  { value: '<15', label: 'Auto-exec Threshold', suffix: '%' },
+  { value: '7',   label: 'Specialized Agents', suffix: '' },
+  { value: '24',  label: 'Hour Autonomy',       suffix: '/7' },
   { value: '2',   label: 'Agent Layers',        suffix: '' },
+  { value: '4',   label: 'Support Channels',    suffix: '' },
 ]
 
-// ── Platform integrations (Shopify + Meta stack) ──────────────────────────────
+// ── Platform integrations (real read + write MCP) ─────────────────────────────
 export const integrations = [
   {
     Icon: SiShopify,
     name: 'Shopify',
     badge: 'shopify_mcp',
     color: '#96BF48',
-    desc: 'Primary data source. OAuth connects your store — agents read catalog, orders, and inventory in real time. Webhooks trigger selective agent runs on orders and refunds.',
-    pills: ['OAuth flow', 'Webhooks', 'Price writes', 'Catalog sync'],
+    desc: 'Live store reads and writes. Agents pull catalog, orders, revenue, and stock — and act on them: discount codes, refunds, cancellations, exchanges, and stock corrections.',
+    pills: ['Stock & orders', 'Discount codes', 'Refunds & cancellations', 'Catalog sync'],
   },
   {
     Icon: SiMeta,
     name: 'Meta Ads',
     badge: 'ads_mcp',
     color: '#0082FB',
-    desc: 'Reads campaign ROAS, CPM, and ad-set performance across your account. Marketing agent auto-pauses poor performers and flags budget increases for your approval.',
-    pills: ['Campaign ROAS', 'Auto-pause', 'Budget control'],
+    desc: 'Campaigns launched, paused, and resumed by the Marketing Agent, with spend guarded by Finance. Budgets never scale on a channel with no evidence it\'s working.',
+    pills: ['Campaign launch', 'Auto pause', 'Budget sign-off'],
   },
   {
     Icon: SiInstagram,
     name: 'Instagram',
     badge: 'social_mcp',
     color: '#E1306C',
-    desc: 'Posts AI-generated content directly to your feed. Monitors story engagement and hashtag reach. DM agent reads and drafts replies to Instagram messages.',
-    pills: ['Content posting', 'DM replies', 'Hashtag signals'],
-  },
-  {
-    Icon: SiFacebook,
-    name: 'Facebook',
-    badge: 'social_mcp',
-    color: '#1877F2',
-    desc: 'Reads Page DMs and manages customer interactions. Surfaces complaint threads and bulk order inquiries into the DM Autopilot queue for your review.',
-    pills: ['Page DMs', 'Complaint detection', 'Order inquiries'],
+    desc: 'Publishes AI-generated, on-brand posts and content calendars. The Customer Support Agent also reads and resolves Instagram DMs.',
+    pills: ['Post publishing', 'Content scheduling', 'DM resolution'],
   },
   {
     Icon: SiWhatsapp,
     name: 'WhatsApp',
     badge: 'notify_mcp',
     color: '#25D366',
-    desc: 'Delivers critical stockout alerts, restock approval nudges, and daily pipeline digests straight to your phone. Supplier messages for approved restock orders go here too.',
-    pills: ['Critical alerts', 'Daily digest', 'Supplier messages'],
+    desc: 'The customer-facing support channel, plus supplier order confirmations and instant brand-owner alerts for critical stockouts and delays.',
+    pills: ['Customer support', 'Supplier messages', 'Founder alerts'],
+  },
+  {
+    Icon: SiGoogle,
+    name: 'Google & News',
+    badge: 'research_mcp',
+    color: '#4285F4',
+    desc: 'Web search, news coverage, and Google Trends feed the Research Agent — real external signals for trends, competitors, and pricing intelligence.',
+    pills: ['Web search', 'News coverage', 'Trend signals'],
+  },
+  {
+    Icon: SiRedis,
+    name: 'Redis',
+    badge: 'runtime',
+    color: '#DC382D',
+    desc: 'The runtime backbone — schedules runs, streams agent activity live to the office, and persists long-term brand memory between conversations.',
+    pills: ['Scheduling', 'Live streaming', 'Agent memory'],
   },
 ]
 
 // ── Marquee items ─────────────────────────────────────────────────────────────
 export const marqueeItems = [
-  { Icon: SiShopify,   label: 'Shopify',       color: '#96BF48' },
-  { Icon: SiMeta,      label: 'Meta Ads',       color: '#0082FB' },
-  { Icon: SiInstagram, label: 'Instagram',      color: '#E1306C' },
-  { Icon: SiFacebook,  label: 'Facebook',       color: '#1877F2' },
-  { Icon: SiWhatsapp,  label: 'WhatsApp',       color: '#25D366' },
-  { Icon: SiTiktok,    label: 'TikTok',         color: '#69C9D0' },
-  { Icon: SiGoogle,    label: 'Google Trends',  color: '#4285F4' },
-  { Icon: SiRedis,     label: 'Redis',          color: '#DC382D' },
+  { Icon: SiShopify,   label: 'Shopify',      color: '#96BF48' },
+  { Icon: SiMeta,      label: 'Meta Ads',     color: '#0082FB' },
+  { Icon: SiInstagram, label: 'Instagram',    color: '#E1306C' },
+  { Icon: SiFacebook,  label: 'Facebook',     color: '#1877F2' },
+  { Icon: SiWhatsapp,  label: 'WhatsApp',     color: '#25D366' },
+  { Icon: SiTiktok,    label: 'TikTok',       color: '#69C9D0' },
+  { Icon: SiGoogle,    label: 'Google & News', color: '#4285F4' },
+  { Icon: SiRedis,     label: 'Redis',        color: '#DC382D' },
 ]
 
-// ── Inline SVG icon for Apify ─────────────────────────────────────────────────
-const ApifyIcon = ({ size, color }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <path
-      d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-      stroke={color}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
+// ── The Command Center: supervisor + office floor plan ────────────────────────
+export const supervisor = {
+  title: 'The Supervisor',
+  role: 'Chief Executive Agent',
+  color: '#d4d4d8',
+  desc: 'The LangGraph brain of the platform. It reads brand memory, plans every run, and delegates to the seven operators — chaining them across domains and consulting Finance before any big spend.',
+  bullets: [
+    'Long-term brand memory that persists across every conversation',
+    'Chains agents across domains — research feeds marketing, sales feeds inventory',
+    'Consults the Finance Agent before large orders or ad-budget increases',
+  ],
+}
 
-// ── Trend sources ─────────────────────────────────────────────────────────────
-export const trendSources = [
+// Mirrors the real 3D office layout in src/pages/office — pods under the glass office.
+export const officePods = [
   {
-    id: 'apify',
-    label: 'Apify',
-    badge: 'social_mcp',
-    color: '#00C4B4',
-    icon: ApifyIcon,
-    platforms: [
-      { PIcon: SiTiktok,    name: 'TikTok',    posts: '15 posts / hashtag', color: '#69C9D0' },
-      { PIcon: SiInstagram, name: 'Instagram', posts: '10 posts / hashtag', color: '#E1306C' },
+    name: 'Demand',
+    blurb: 'Market & customer facing',
+    desks: [
+      { label: 'Research', role: 'Market Intelligence', color: '#a855f7' },
+      { label: 'Sales',    role: 'Revenue & Growth',    color: '#60a5fa' },
     ],
-    bullets: [
-      { stat: '4',   unit: 'hashtags',   desc: 'scraped per run (top 2 TikTok, top 2 IG)' },
-      { stat: 'PK',  unit: 'geo-locked', desc: 'Pakistan region targeting only' },
-      { stat: '24h', unit: 'cached',     desc: 'results cached to protect quota' },
-    ],
-    desc: 'Apify cloud actors scrape real post data from TikTok and Instagram hashtags — views, likes, captions, and engagement signals — without hitting platform API rate limits.',
-    pills: ['#PakistaniFashion', '#FashionTikTokPK', '#PakistaniOutfits', 'GRWM'],
-    pillLabel: 'Monitored hashtags',
   },
   {
-    id: 'gtrends',
-    label: 'Google Trends',
-    badge: 'trends_mcp',
-    color: '#4285F4',
-    icon: ({ size }) => <SiGoogle size={size} color="#4285F4" />,
-    platforms: [
-      { PIcon: SiGoogle, name: 'Pytrends', posts: 'free · no quota', color: '#4285F4' },
+    name: 'Ops',
+    blurb: 'Procurement & stock',
+    desks: [
+      { label: 'Supplier',  role: 'Procurement', color: '#38bdf8' },
+      { label: 'Inventory', role: 'Operations',  color: '#22c55e' },
     ],
-    bullets: [
-      { stat: '5',  unit: 'keywords', desc: 'compared per run (3 base + 2 from catalog)' },
-      { stat: '7d', unit: 'window',   desc: 'rolling week for recency-weighted signals' },
-      { stat: '0',  unit: 'cost',     desc: 'free via Pytrends — no API key needed' },
+  },
+  {
+    name: 'Growth',
+    blurb: 'Brand & revenue',
+    desks: [
+      { label: 'Finance',   role: 'Finance',           color: '#facc15' },
+      { label: 'Marketing', role: 'Brand & Marketing', color: '#f97316' },
     ],
-    desc: 'Pytrends pulls keyword interest-over-time data from Google Trends and cross-references it with catalog SKU names to surface rising demand before competitors react.',
-    pills: ['lawn suit', 'co-ord set', 'cargo pants', 'linen kurta', 'modest fashion'],
-    pillLabel: 'Base keywords',
   },
 ]
 
@@ -207,26 +200,31 @@ export const howItWorksSteps = [
   {
     step: '01',
     title: 'Connect Shopify & Meta',
-    desc: 'Link your Shopify store and Meta ad account via OAuth. Agents immediately read your catalog, orders, and ad campaigns. Shopify webhooks trigger selective runs on new orders and refunds.',
+    desc: 'Link your store and ad account via OAuth. Agents immediately get live read-write access to your catalog, orders, revenue, and campaigns. Works across multiple brands from day one.',
   },
   {
     step: '02',
-    title: 'Pipeline runs on schedule',
-    desc: 'Celery + Redis schedules hourly inventory sweeps and full daily pipeline runs across all 8 agents. The LangGraph supervisor decides which agents to activate based on the trigger type.',
+    title: 'The Supervisor plans, agents execute',
+    desc: 'The deep-agent supervisor reads your brand memory and plans each run, then delegates to the seven operators. Each runs its own LangGraph pipeline — placing orders, publishing posts, and launching campaigns, with guardrails.',
   },
   {
     step: '03',
-    title: 'Review the Approvals queue',
-    desc: 'High-stakes decisions (price changes ≥15%, restock orders, ad budget increases, content posts) land in your queue with full context — inventory position, trend signals, ROAS. One tap to approve or reject.',
+    title: 'Finance protects the margins',
+    desc: 'Before any large purchase order or ad-budget increase, the Finance Agent checks affordability, forecasts cash, and computes real product margins. Every budget recommendation is recorded and visible on the dashboard.',
   },
   {
     step: '04',
     title: 'Chat with your AI supervisor',
-    desc: 'Ask FashionOS anything in natural language. The deep agent supervisor has brand-specific long-term memory, DB access to all pipeline results, and can spawn live Shopify and Meta subagents.',
+    desc: 'Ask FashionOS anything in natural language. It holds long-term brand memory, reads live pipeline results, and can spawn and chain the seven agents in a single conversation.',
   },
   {
     step: '05',
-    title: 'Get WhatsApp alerts',
-    desc: 'Critical stockouts, approval reminders, approved restock supplier messages, and daily pipeline digests land straight on your phone via WhatsApp.',
+    title: 'Watch the Command Center',
+    desc: 'The virtual office streams every agent\'s live activity — the tools they call and what they execute — across the demand, ops, and growth pods under the supervisor\'s glass office.',
+  },
+  {
+    step: '06',
+    title: 'Customer support on autopilot',
+    desc: 'Support resolves real customer issues on WhatsApp, Instagram DM, email, and embedded webchat — refunds, exchanges, cancellations, and tickets — under your actual policy, escalating when limits are hit.',
   },
 ]
