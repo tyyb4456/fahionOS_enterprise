@@ -17,7 +17,7 @@ function Reasoning({ text, color }) {
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
           background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-          fontFamily: "'Knewave', cursive", fontSize: '0.55rem', letterSpacing: '0.08em',
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.55rem', letterSpacing: '0.08em',
           textTransform: 'uppercase', color: 'var(--text-muted)',
         }}
       >
@@ -47,7 +47,7 @@ function ProgressList({ items, color }) {
         <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
           <ProgressIcon status={p.status} color={color} />
           <span style={{
-            fontSize: '0.62rem', fontFamily: "'Knewave', cursive", letterSpacing: '0.04em',
+            fontSize: '0.62rem', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.04em',
             color: p.status === 'done' ? 'var(--text-muted)' : 'var(--text-secondary)',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
@@ -69,7 +69,7 @@ function ProgressStrip({ items, color }) {
     }}>
       <Loader2 size={10} color={color} style={{ animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
       <span style={{
-        fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: "'Knewave', cursive",
+        fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
         letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
         {active.text}
@@ -120,7 +120,7 @@ export default function SubagentOutput({ streams = {}, activeSource = null, stre
                 boxShadow: active ? `0 0 6px ${color}` : 'none',
               }} />
               <span style={{
-                fontFamily: "'Knewave', cursive", fontSize: '0.62rem', letterSpacing: '0.06em',
+                fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.62rem', letterSpacing: '0.06em',
                 textTransform: 'uppercase', color: 'var(--text-secondary)', flex: 1, whiteSpace: 'nowrap',
                 overflow: 'hidden', textOverflow: 'ellipsis',
               }}>

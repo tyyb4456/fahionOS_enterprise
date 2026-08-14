@@ -29,7 +29,7 @@ export function Tag({ agent, status, selected, notify, action, onSelect }) {
             </div>
           )}
           <div style={{
-            fontFamily: "'Knewave', cursive", fontSize: '0.72rem', letterSpacing: '0.08em',
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.72rem', letterSpacing: '0.08em',
             textTransform: 'uppercase', whiteSpace: 'nowrap',
             color: working || selected ? color : '#9a9aa2',
             textShadow: '0 1px 4px rgba(0,0,0,0.9)',
@@ -40,7 +40,7 @@ export function Tag({ agent, status, selected, notify, action, onSelect }) {
           {!working && (
             <div style={{
               fontSize: '0.58rem', whiteSpace: 'nowrap', opacity: 0.55,
-              fontFamily: "'Knewave', cursive", letterSpacing: '0.04em', color: '#7c7c84',
+              fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.04em', color: '#7c7c84',
             }}>
               {role}
             </div>
@@ -50,7 +50,7 @@ export function Tag({ agent, status, selected, notify, action, onSelect }) {
               marginTop: 1, padding: '3px 9px', borderRadius: 8, whiteSpace: 'nowrap',
               background: 'rgba(20,20,22,0.92)', border: `1px solid ${status === 'error' ? '#ef4444' : color}66`,
               color: status === 'error' ? '#ef4444' : color,
-              fontSize: '0.62rem', fontFamily: "'Knewave', cursive", letterSpacing: '0.03em',
+              fontSize: '0.62rem', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.03em',
               maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
               {bubbleText}
@@ -89,7 +89,7 @@ export function AgentStation({ agent, status, action, lastTool, selected, notify
       <Tag agent={agent} status={status} selected={selected} notify={notify} action={action} onSelect={() => onSelect(agent.key)} />
       {selected && lastTool && (
         <Html position={[0, 1.95, 0.1]} center distanceFactor={10} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-          <div style={{ fontSize: '0.55rem', color: '#b9b9c1', fontFamily: "'Knewave', cursive", whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.55rem', color: '#b9b9c1', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
             tool: {lastTool}
           </div>
         </Html>
@@ -115,7 +115,7 @@ export function SupervisorStation({ status, action, notify, selected, onSelect }
       <Tag agent={SUPERVISOR} status={selected ? 'working' : status} selected={selected} notify={notify} action={action} onSelect={() => onSelect('supervisor')} />
       {selected && (
         <Html position={[0, 1.95, 0.1]} center distanceFactor={10} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-          <div style={{ fontSize: '0.55rem', color: '#d9d9df', fontFamily: "'Knewave', cursive", whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.55rem', color: '#d9d9df', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
             {action || 'Standing by'}
           </div>
         </Html>

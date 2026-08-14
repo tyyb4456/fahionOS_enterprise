@@ -32,7 +32,7 @@ export default function Layout() {
             <Menu size={20} />
           </button>
           <span style={{
-            fontFamily: "'Alfa Slab One', serif",
+            fontFamily: "'Kola-Regular', serif",
             fontSize: '1.15rem', fontWeight: 600,
             letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-primary)',
           }}>
@@ -77,7 +77,7 @@ export default function Layout() {
         {/* Brand */}
         <div className="p-5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--card-border)' }}>
           <span style={{
-            fontFamily: "'Alfa Slab One', serif",
+            fontFamily: "'Kola-Regular', serif",
             fontSize: '1.25rem', fontWeight: 600,
             letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-primary)',
           }}>
@@ -118,7 +118,7 @@ export default function Layout() {
                   onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = '' } }}
                 >
                   <Icon size={15} style={{ color: isActive ? 'var(--gold)' : 'inherit', flexShrink: 0 }} />
-                  <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.78rem', letterSpacing: '0.02em' }}>
+                  <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.78rem', letterSpacing: '0.02em' }}>
                     {label}
                   </span>
                 </div>
@@ -131,7 +131,7 @@ export default function Layout() {
         <div className="p-4 flex items-center justify-between gap-2.5" style={{ borderTop: '1px solid var(--card-border)' }}>
           <div className="flex items-center gap-2.5">
             <UserButton afterSignOutUrl="/" />
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: "'Knewave', cursive", textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               Account
             </span>
           </div>

@@ -94,7 +94,7 @@ function JsonBlock({ value }) {
           ? <AlertTriangle size={11} color="#ef4444" style={{ flexShrink: 0 }} />
           : <Database size={11} color="var(--text-muted)" style={{ flexShrink: 0 }} />}
         <span style={{
-          fontFamily: "'Knewave', cursive", fontSize: '0.58rem', letterSpacing: '0.07em',
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.58rem', letterSpacing: '0.07em',
           textTransform: 'uppercase', color: error ? '#ef4444' : 'var(--text-secondary)',
           flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
@@ -107,7 +107,7 @@ function JsonBlock({ value }) {
 
       {subtitle && !open && (
         <div style={{
-          padding: '0 10px 8px', fontFamily: "'Knewave', cursive", fontSize: '0.62rem',
+          padding: '0 10px 8px', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.62rem',
           color: 'var(--text-muted)', opacity: 0.85, lineHeight: 1.5,
         }}>
           {subtitle}
@@ -120,7 +120,7 @@ function JsonBlock({ value }) {
             <ul style={{ margin: 0, paddingLeft: '1.1em', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {value.map((v, i) => (
                 <li key={i} style={{
-                  fontFamily: "'Knewave', cursive", fontSize: '0.62rem',
+                  fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.62rem',
                   color: 'var(--text-secondary)', lineHeight: 1.5,
                 }}>{String(v)}</li>
               ))}

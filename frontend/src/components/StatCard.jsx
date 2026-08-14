@@ -86,7 +86,7 @@ export default function StatCard({ label, value, sub, color = 'gold', icon: Icon
           textTransform: 'uppercase', letterSpacing: '0.12em',
           color: 'var(--text-secondary)', lineHeight: 1,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          fontFamily: "'Knewave', cursive",
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
         }}>
           {label}
         </span>
@@ -94,7 +94,7 @@ export default function StatCard({ label, value, sub, color = 'gold', icon: Icon
         <div style={{
           fontSize: '1.7rem', fontWeight: 300, lineHeight: 1,
           color: 'var(--text-primary)',
-          fontFamily: "'Alfa Slab One', serif",
+          fontFamily: "'Kola-Regular', serif",
           fontVariantNumeric: 'tabular-nums',
         }}>
           {value ?? '—'}
@@ -104,7 +104,7 @@ export default function StatCard({ label, value, sub, color = 'gold', icon: Icon
           <div style={{
             fontSize: '0.6rem', fontWeight: 500,
             color: c.text, lineHeight: 1,
-            fontFamily: "'Knewave', cursive",
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
           }}>
             {sub}
           </div>

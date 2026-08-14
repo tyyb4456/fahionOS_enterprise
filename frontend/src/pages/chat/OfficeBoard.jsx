@@ -99,7 +99,7 @@ function AgentAvatar({ agentKey, status, xPercent, deskY, loungeY, isMobile }) {
               position: 'absolute', bottom: '100%', left: '50%', x: '-50%',
               marginBottom: 6, whiteSpace: 'nowrap',
               background: 'var(--card-bg)', border: `1px solid ${color}55`,
-              color, fontFamily: "'Knewave', cursive", fontSize: '0.55rem',
+              color, fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.55rem',
               padding: '3px 8px', borderRadius: 8,
             }}
           >
@@ -148,7 +148,7 @@ function AgentAvatar({ agentKey, status, xPercent, deskY, loungeY, isMobile }) {
         </div>
 
         <span style={{
-          fontFamily: "'Knewave', cursive", fontSize: isMobile ? '0.5rem' : '0.56rem',
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: isMobile ? '0.5rem' : '0.56rem',
           letterSpacing: '0.04em', textTransform: 'uppercase',
           color: atDesk ? color : 'var(--text-muted)', opacity: atDesk ? 1 : 0.65,
           whiteSpace: 'nowrap',
@@ -252,7 +252,7 @@ export default function OfficeBoard({ toolCalls, isStreaming, isMobile = false }
           <Brain size={isMobile ? 15 : 18} color={anyActive ? 'var(--gold)' : 'var(--text-muted)'} />
         </div>
         <span style={{
-          fontFamily: "'Knewave', cursive", fontSize: isMobile ? '0.5rem' : '0.56rem',
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: isMobile ? '0.5rem' : '0.56rem',
           letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)',
         }}>
           Supervisor
@@ -303,7 +303,7 @@ export default function OfficeBoard({ toolCalls, isStreaming, isMobile = false }
 
       <div style={{
         position: 'absolute', left: 8, top: LOUNGE_Y - (isMobile ? 14 : 18),
-        fontFamily: "'Knewave', cursive", fontSize: '0.5rem', letterSpacing: '0.08em',
+        fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.5rem', letterSpacing: '0.08em',
         textTransform: 'uppercase', color: 'var(--text-muted)', opacity: 0.4,
       }}>
         Break room

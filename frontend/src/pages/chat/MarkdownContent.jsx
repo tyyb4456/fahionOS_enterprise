@@ -3,7 +3,7 @@ import remarkGfm from 'remark-gfm'
 import { GOLD } from './constants'
 
 export default function MarkdownContent({ text, color = 'var(--text-body)', fontSize = '0.82rem', italic = false }) {
-  const base = { fontFamily: "'Knewave', cursive", color, lineHeight: 1.7, fontSize }
+  const base = { fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", color, lineHeight: 1.7, fontSize }
 
   return (
     <div style={{ ...base, fontStyle: italic ? 'italic' : 'normal' }}>

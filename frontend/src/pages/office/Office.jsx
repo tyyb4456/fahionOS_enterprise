@@ -51,7 +51,7 @@ class CanvasBoundary extends Component {
       return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>
           <Building2 size={36} style={{ color: 'var(--gold)' }} />
-          <div style={{ fontFamily: "'Knewave', cursive", letterSpacing: '0.06em' }}>3D office unavailable</div>
+          <div style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.06em' }}>3D office unavailable</div>
           <div style={{ fontSize: '0.8rem', maxWidth: 380, lineHeight: 1.5 }}>
             Your browser can&apos;t open a WebGL scene here. The live feed below still works.
           </div>
@@ -69,7 +69,7 @@ function StatusPill({ status, text }) {
       display: 'inline-flex', alignItems: 'center', gap: 6,
       padding: '2px 9px', borderRadius: 999,
       background: 'var(--item-bg)', border: `1px solid ${color}44`,
-      color, fontFamily: "'Knewave', cursive", fontSize: '0.62rem', letterSpacing: '0.06em',
+      color, fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.62rem', letterSpacing: '0.06em',
       textTransform: 'uppercase', whiteSpace: 'nowrap',
     }}>
       <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}` }} />
@@ -99,7 +99,7 @@ function NotificationItem({ n }) {
         {icon}
       </span>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: '0.74rem', color: 'var(--text-primary)', fontFamily: "'Knewave', cursive", letterSpacing: '0.02em' }}>
+        <div style={{ fontSize: '0.74rem', color: 'var(--text-primary)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.02em' }}>
           {n.agent === 'supervisor' ? 'Supervisor' : agent.label}
         </div>
         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.text}</div>
@@ -135,7 +135,7 @@ function CommunicationFeed({ messages }) {
               <Arrow size={13} />
             </span>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', fontFamily: "'Knewave', cursive", letterSpacing: '0.04em' }}>
+              <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.04em' }}>
                 {sender.label} → {receiver.label}
               </div>
               <div style={{ fontSize: '0.74rem', color: 'var(--text-primary)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.text}</div>
@@ -224,7 +224,7 @@ export default function Office() {
             <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
               <ChevronLeft size={16} />
             </button>
-            <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.72rem', letterSpacing: '0.08em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+            <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.72rem', letterSpacing: '0.08em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               Back to feed
             </span>
           </div>
@@ -234,12 +234,12 @@ export default function Office() {
                 width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: `${selectedMeta.color}1a`, border: `1.5px solid ${selectedMeta.color}`,
-                fontFamily: "'Alfa Slab One', serif", color: selectedMeta.color, fontSize: '1rem',
+                fontFamily: "'Kola-Regular', serif", color: selectedMeta.color, fontSize: '1rem',
               }}>
                 {selectedMeta.label.slice(0, 1)}
               </div>
               <div>
-                <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: '0.95rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{selectedMeta.label}</div>
+                <div style={{ fontFamily: "'Kola-Regular', serif", fontSize: '0.95rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{selectedMeta.label}</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>{selectedMeta.role}</div>
               </div>
             </div>
@@ -274,12 +274,12 @@ export default function Office() {
         <>
           <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <MessageSquare size={14} style={{ color: 'var(--gold)' }} />
-            <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>Communication</span>
+            <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>Communication</span>
           </div>
           <CommunicationFeed messages={feed.messages} />
           <div style={{ padding: '12px 14px', borderTop: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Activity size={14} style={{ color: 'var(--gold)' }} />
-            <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>Recent activity</span>
+            <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>Recent activity</span>
           </div>
           <EventLog activity={feed.activity} />
         </>
@@ -301,10 +301,10 @@ export default function Office() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <Building2 size={18} style={{ color: 'var(--gold)', flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: '1rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+            <div style={{ fontFamily: "'Kola-Regular', serif", fontSize: '1rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
               Virtual AI Office
             </div>
-            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: "'Knewave', cursive", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
               Live agent workspace · drag to look around
             </div>
           </div>
@@ -340,8 +340,8 @@ export default function Office() {
                   boxShadow: '0 12px 40px rgba(0,0,0,0.55)', overflow: 'hidden',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid var(--card-border)' }}>
-                    <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>Notifications</span>
-                    <button onClick={feed.markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gold)', fontSize: '0.65rem', fontFamily: "'Knewave', cursive" }}>
+                    <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>Notifications</span>
+                    <button onClick={feed.markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gold)', fontSize: '0.65rem', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif" }}>
                       Clear all
                     </button>
                   </div>
@@ -383,7 +383,7 @@ export default function Office() {
           {(feed.connecting || (!feed.connected && !feed.error)) && !allIdle && (
             <div style={overlayStyle}>
               <Loader2 size={22} style={{ color: 'var(--gold)', animation: 'office-pulse 1.2s ease-in-out infinite' }} />
-              <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+              <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                 Connecting to the office…
               </span>
             </div>
@@ -400,7 +400,7 @@ export default function Office() {
               <span style={{ fontSize: '0.72rem', color: 'var(--text-primary)' }}>Live feed unavailable</span>
               <button onClick={feed.retryNow} style={{
                 background: 'var(--hover-bg)', border: '1px solid var(--card-border)', borderRadius: 8,
-                padding: '3px 10px', cursor: 'pointer', color: 'var(--gold)', fontFamily: "'Knewave', cursive", fontSize: '0.66rem',
+                padding: '3px 10px', cursor: 'pointer', color: 'var(--gold)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.66rem',
               }}>
                 Retry
               </button>
@@ -413,7 +413,7 @@ export default function Office() {
               position: 'absolute', top: 12, left: 12, zIndex: 15, display: 'flex', alignItems: 'center', gap: 6,
               padding: '4px 10px', borderRadius: 999, background: 'rgba(18,18,20,0.8)',
               border: '1px solid #22c55e44', color: '#22c55e', fontSize: '0.6rem',
-              fontFamily: "'Knewave', cursive", letterSpacing: '0.06em',
+              fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.06em',
             }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'office-pulse 2s ease-in-out infinite' }} />
               LIVE
@@ -443,7 +443,7 @@ export default function Office() {
             background: 'var(--bg)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid var(--card-border)' }}>
-              <span style={{ fontFamily: "'Alfa Slab One', serif", fontSize: '0.95rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>Activity</span>
+              <span style={{ fontFamily: "'Kola-Regular', serif", fontSize: '0.95rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>Activity</span>
               <button onClick={() => setShowFeed(false)} style={iconBtn}><X size={16} /></button>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
@@ -469,12 +469,12 @@ export default function Office() {
                     width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: `${selectedMeta.color}1a`, border: `1.5px solid ${selectedMeta.color}`,
-                    fontFamily: "'Alfa Slab One', serif", color: selectedMeta.color, fontSize: '1rem',
+                    fontFamily: "'Kola-Regular', serif", color: selectedMeta.color, fontSize: '1rem',
                   }}>
                     {selectedMeta.label.slice(0, 1)}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: '0.95rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{selectedMeta.label}</div>
+                    <div style={{ fontFamily: "'Kola-Regular', serif", fontSize: '0.95rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{selectedMeta.label}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>{selectedMeta.role}</div>
                   </div>
                   <StatusPill status={selectedStatus} text={STATUS_LABEL[selectedStatus] || selectedStatus} />

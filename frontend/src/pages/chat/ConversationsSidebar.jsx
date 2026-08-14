@@ -25,7 +25,7 @@ function ConvoItem({ convo, isActive, onSelect, onDelete }) {
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
         <span style={{
-          fontFamily: "'Knewave', cursive", fontSize: '0.78rem',
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.78rem',
           color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
           lineHeight: 1.4, flex: 1,
           overflow: 'hidden', display: '-webkit-box',
@@ -51,7 +51,7 @@ function ConvoItem({ convo, isActive, onSelect, onDelete }) {
         )}
       </div>
       <span style={{
-        fontFamily: "'Knewave', cursive", fontSize: '0.65rem',
+        fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.65rem',
         color: 'var(--text-muted)', opacity: 0.7,
       }}>
         {relativeTime(convo.updated_at)}
@@ -91,7 +91,7 @@ export default function ConversationsSidebar({
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <span style={{
-            fontFamily: "'Knewave', cursive", fontSize: '0.65rem',
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.65rem',
             letterSpacing: '0.12em', textTransform: 'uppercase',
             color: 'var(--text-muted)', fontWeight: 500,
           }}>
@@ -133,7 +133,7 @@ export default function ConversationsSidebar({
           ) : conversations.length === 0 ? (
             <div style={{
               padding: '20px 14px',
-              fontFamily: "'Knewave', cursive", fontSize: '0.72rem',
+              fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.72rem',
               color: 'var(--text-muted)', opacity: 0.6, textAlign: 'center', lineHeight: 1.6,
             }}>
               No chats yet.<br />Start a new conversation.

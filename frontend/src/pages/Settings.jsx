@@ -101,7 +101,7 @@ export default function Settings() {
     <div className="p-6 max-w-2xl space-y-6" style={{ position: 'relative', zIndex: 1 }}>
       <div>
         <div className="section-pill">⚙ Configuration</div>
-        <h1 className="page-title-shimmer text-2xl" style={{ fontFamily: "'Alfa Slab One', serif" }}>Settings</h1>
+        <h1 className="page-title-shimmer text-2xl" style={{ fontFamily: "'Kola-Regular', serif" }}>Settings</h1>
         {brand && <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{brand.owner_email} · {brand.plan} plan</p>}
         <div className="gradient-accent-line" />
       </div>

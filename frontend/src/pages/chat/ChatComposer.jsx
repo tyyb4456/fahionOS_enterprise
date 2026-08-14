@@ -70,7 +70,7 @@ const ChatComposer = forwardRef(function ChatComposer(
           style={{
             flex: 1, background: 'transparent', border: 'none', outline: 'none',
             resize: 'none',
-            fontFamily: "'Knewave', cursive",
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
             fontSize: '0.875rem',
             color: 'var(--text-primary)',
             lineHeight: 1.6,
@@ -88,7 +88,7 @@ const ChatComposer = forwardRef(function ChatComposer(
         {/* Right side: model label + send */}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginLeft: 10, flexShrink: 0, alignSelf: 'flex-end' }}>
           <span style={{
-            fontFamily: "'Knewave', cursive",
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
             fontSize: '0.65rem',
             color: 'var(--text-muted)',
             letterSpacing: '0.04em',
@@ -133,7 +133,7 @@ const ChatComposer = forwardRef(function ChatComposer(
       {/* Hint */}
       {!centered && (
         <p style={{
-          fontFamily: "'Knewave', cursive",
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
           fontSize: '0.6rem',
           color: 'var(--text-muted)',
           opacity: 0.6,

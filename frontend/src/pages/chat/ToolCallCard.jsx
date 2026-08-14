@@ -32,7 +32,7 @@ function AgentChips({ names }) {
         const c = meta?.color || GOLD
         return (
           <span key={n} style={{
-            fontFamily: "'Knewave', cursive", fontSize: '0.58rem',
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.58rem',
             letterSpacing: '0.06em', textTransform: 'uppercase',
             padding: '2px 7px', color: c, border: `1px solid ${c}44`, background: `${c}14`,
           }}>{meta?.label || n}</span>
@@ -58,7 +58,7 @@ export default function ToolCallCard({ call }) {
         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: hasData ? 'pointer' : 'default' }}
       >
         <BarChart2 size={11} color="var(--text-muted)" style={{ opacity: 0.8 }} />
-        <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.63rem', letterSpacing: '0.06em', color: 'var(--text-secondary)', flex: 1 }}>
+        <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.63rem', letterSpacing: '0.06em', color: 'var(--text-secondary)', flex: 1 }}>
           {call.status === 'running' ? 'Calling ' : 'Called '}
           <span style={{ color: GOLD }}>{label}</span>
           {pStatus && pStatus !== 'done' && <span style={{ color: 'var(--text-muted)', opacity: 0.85 }}> · {pStatus}</span>}

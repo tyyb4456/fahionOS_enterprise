@@ -7,13 +7,13 @@ export default function PrettyJSON({ value, depth = 0 }) {
 
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      return <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.66rem', color: 'rgba(242,237,228,0.25)' }}>No items</span>
+      return <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.66rem', color: 'rgba(242,237,228,0.25)' }}>No items</span>
     }
     if (value.every(isFlatObject)) {
       const cols = [...new Set(value.flatMap(o => Object.keys(o)))]
       return (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Knewave', cursive", fontSize: '0.63rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.63rem' }}>
             <thead>
               <tr style={{ color: 'rgba(242,237,228,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 {cols.map(c => (
@@ -49,7 +49,7 @@ export default function PrettyJSON({ value, depth = 0 }) {
 
   const entries = Object.entries(value)
   if (entries.length === 0) {
-    return <span style={{ fontFamily: "'Knewave', cursive", fontSize: '0.66rem', color: 'rgba(242,237,228,0.25)' }}>Empty</span>
+    return <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.66rem', color: 'rgba(242,237,228,0.25)' }}>Empty</span>
   }
 
   return (
@@ -65,7 +65,7 @@ export default function PrettyJSON({ value, depth = 0 }) {
             borderBottom: depth === 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
           }}>
             <span style={{
-              fontFamily: "'Knewave', cursive", fontSize: '0.62rem',
+              fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.62rem',
               letterSpacing: '0.06em', color: 'rgba(242,237,228,0.4)',
               minWidth: isComplex ? 'auto' : 110, flexShrink: 0,
             }}>

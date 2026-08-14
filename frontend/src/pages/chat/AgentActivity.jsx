@@ -24,7 +24,7 @@ export default function AgentActivity({ steps = [], streaming = false, isMobile 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <Workflow size={12} color="var(--text-muted)" style={{ opacity: 0.8 }} />
         <span style={{
-          fontFamily: "'Knewave', cursive", fontSize: '0.6rem', letterSpacing: '0.08em',
+          fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.6rem', letterSpacing: '0.08em',
           textTransform: 'uppercase', color: 'var(--text-muted)', flex: 1,
         }}>
           Agent activity
@@ -38,7 +38,7 @@ export default function AgentActivity({ steps = [], streaming = false, isMobile 
           return (
             <span key={source} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontFamily: "'Knewave', cursive", fontSize: '0.58rem', letterSpacing: '0.05em',
+              fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.58rem', letterSpacing: '0.05em',
               textTransform: 'uppercase', whiteSpace: 'nowrap',
               padding: '3px 9px', borderRadius: 999,
               color, border: `1px solid ${color}55`, background: `${color}14`,
@@ -53,7 +53,7 @@ export default function AgentActivity({ steps = [], streaming = false, isMobile 
       </div>
 
       <div style={{
-        fontFamily: "'Knewave', cursive", fontSize: '0.58rem', color: 'var(--text-muted)', opacity: 0.75,
+        fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.58rem', color: 'var(--text-muted)', opacity: 0.75,
         letterSpacing: '0.02em',
       }}>
         {sourceMeta(last.source).label} · <span style={{ color: 'var(--text-secondary)' }}>{last.node || '…'}</span>

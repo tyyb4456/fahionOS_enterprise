@@ -56,7 +56,7 @@ export default function ReasoningBlock({ text, streaming }) {
         )}
         <span
           style={{
-            fontFamily: "'Knewave', cursive",
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
             fontSize: '0.62rem',
             fontWeight: 600,
             letterSpacing: '0.08em',

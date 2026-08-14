@@ -36,7 +36,7 @@ export default function App() {
           <Route path="chat" element={<Chat />} />
           <Route path="office" element={
             <Suspense fallback={
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: "'Knewave', cursive", letterSpacing: '0.08em' }}>
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.08em' }}>
                 Loading office…
               </div>
             }>

@@ -292,9 +292,9 @@ export default function LandingNoir() {
       <section className="flex flex-col-reverse min-[901px]:flex-row min-h-screen pt-22 border-b border-[#d4d4d8]/10 relative overflow-hidden" ref={heroRef}>
         {/* Left: Text */}
         <div className="flex-1 flex flex-col justify-center z-2 p-[56px_32px] min-[901px]:p-[48px_40px_64px_48px] lg:p-[64px_64px_80px_80px] reveal-on-scroll">
-          <h1 className="font-cormorant text-[clamp(3.4rem,5.5vw,5.8rem)] leading-[0.95] font-light text-[#f0eeeb] m-[0_0_28px]">
+          <h1 className="font-cormorant text-[clamp(3.4rem,5.5vw,5.8rem)] leading-[0.95] font-bold text-[#f0eeeb] m-[0_0_28px]">
             Run Your<br />
-            <em className="italic font-normal bg-[linear-gradient(90deg,#F2EDE4_0%,#d4d4d8_50%,#F2EDE4_100%)] bg-size-[200%_auto] text-transparent bg-clip-text animate-[text-shimmer_6s_linear_infinite] drop-shadow-[0_0_20px_rgba(212,212,216,0.25)]">Fashion Brand</em><br />
+            <em className="italic font-bold bg-[linear-gradient(90deg,#F2EDE4_0%,#d4d4d8_50%,#F2EDE4_100%)] bg-size-[200%_auto] text-transparent bg-clip-text animate-[text-shimmer_6s_linear_infinite] drop-shadow-[0_0_20px_rgba(212,212,216,0.25)]">Fashion Brand</em><br />
             on Autopilot
           </h1>
 
