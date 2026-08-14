@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, SignInButton } from '@clerk/clerk-react'
-import { Sparkles, ArrowRight, ArrowDown, ChevronRight, ChevronLeft, CheckCircle2, Zap, Menu, X, Brain } from 'lucide-react'
+import { Sparkles, ArrowRight, ArrowDown, ChevronRight, ChevronLeft, CheckCircle2, Zap, Menu, X, Brain, Settings } from 'lucide-react'
 import { agents, howItWorksSteps, integrations, marqueeItems, supervisor, officePods } from './LandingData.jsx'
 
 const GOLD = '#d4d4d8'
@@ -308,9 +308,9 @@ export default function LandingNoir() {
             {isSignedIn ? (
               <button
                 className="py-3.75 px-10 border border-[#d4d4d8]/55 rounded-md text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.22em] uppercase cursor-pointer transition-all duration-200 flex items-center gap-2.5 w-full sm:w-auto justify-center sm:justify-start hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white"
-                onClick={() => navigate('/chat')}
+                onClick={() => navigate('/setup')}
               >
-                Go to Chat
+                Setup
                 <ArrowRight size={15} />
               </button>
             ) : (
@@ -788,8 +788,8 @@ export default function LandingNoir() {
 
         <div className="reveal-on-scroll reveal-delay-3">
           {isSignedIn ? (
-            <button className="py-4 px-14 border border-[#d4d4d8]/55 rounded-[6px] text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.24em] uppercase cursor-pointer transition-all duration-200 inline-flex items-center gap-3 hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white max-[640px]:w-full max-[640px]:justify-center" onClick={() => navigate('/chat')}>
-              Go to Chat
+            <button className="py-4 px-14 border border-[#d4d4d8]/55 rounded-[6px] text-[#d4d4d8] bg-transparent text-[0.72rem] font-semibold tracking-[0.24em] uppercase cursor-pointer transition-all duration-200 inline-flex items-center gap-3 hover:bg-[#d4d4d8]/10 hover:border-[#d4d4d8] hover:text-white max-[640px]:w-full max-[640px]:justify-center" onClick={() => navigate('/setup')}>
+              Open Setup
               <ArrowRight size={16} />
             </button>
           ) : (

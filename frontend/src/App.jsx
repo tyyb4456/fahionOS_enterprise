@@ -1,9 +1,12 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react'
 import Layout from './components/Layout'
 import Landing from './pages/Landing'
-import Settings from './pages/Settings'
+import Setup from './pages/Setup'
+import Dashboard from './pages/Dashboard'
+import AgentDocs from './pages/AgentDocs'
+import Agents from './pages/agents/Agents'
 import Chat from './pages/Chat'
 
 // three.js is ~1MB+ — only load the Virtual Office page when it's actually opened.
@@ -16,6 +19,14 @@ function ProtectedRoute({ children }) {
       <SignedOut><RedirectToSignIn /></SignedOut>
     </>
   )
+}
+
+// OAuth callbacks land on /settings?shopify=connected (backend FRONTEND_URL
+// redirect) — settings was replaced by the setup flow, so forward with the
+// query params intact for the success banners.
+function SettingsRedirect() {
+  const location = useLocation()
+  return <Navigate to={`/setup${location.search}`} replace />
 }
 
 export default function App() {
@@ -31,8 +42,11 @@ export default function App() {
             <Layout />
           </ProtectedRoute>
         }>
-          {/* <Route path="dashboard" element={<Dashboard />} /> */}
-          <Route path="settings" element={<Settings />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="setup" element={<Setup />} />
+          <Route path="docs" element={<AgentDocs />} />
+          <Route path="agents" element={<Agents />} />
+          <Route path="settings" element={<SettingsRedirect />} />
           <Route path="chat" element={<Chat />} />
           <Route path="office" element={
             <Suspense fallback={

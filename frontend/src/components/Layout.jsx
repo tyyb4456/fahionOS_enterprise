@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
-import { Settings, MessageSquare, Menu, X, Sun, Moon, Building2 } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, Menu, X, Sun, Moon, Building2, BrainCircuit, FileText, Settings } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
 const navItems = [
-  { to: '/office',   icon: Building2,    label: 'Office'   },
-  { to: '/chat',      icon: MessageSquare, label: 'Chat'      },
-  { to: '/settings',  icon: Settings,         label: 'Settings'  },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/office',    icon: Building2,       label: 'Office'   },
+  { to: '/chat',      icon: MessageSquare,   label: 'Chat'     },
+  { to: '/agents',    icon: BrainCircuit,    label: 'Agents'   },
+  { to: '/docs',      icon: FileText,        label: 'Documents'},
+  { to: '/setup',     icon: Settings,        label: 'Setup'    },
 ]
 
 export default function Layout() {
