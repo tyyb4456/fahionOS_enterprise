@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 
 const palette = {
   gold:   { bar: '#d4d4d8', text: '#d4d4d8', rgb: '212,212,216'  },
@@ -10,9 +11,13 @@ const palette = {
   blue:   { bar: '#60a5fa', text: '#60a5fa', rgb: '96,165,250'  },
 }
 
-export default function StatCard({ label, value, sub, color = 'gold', icon: Icon }) {
+export default function StatCard({ label, value, sub, color = 'gold', icon: Icon, delta, deltaInvert }) {
   const c = palette[color] || palette.gold
   const [hov, setHov] = useState(false)
+
+  const deltaNum = typeof delta === 'number' && !Number.isNaN(delta) ? delta : null
+  const deltaGood = deltaNum === null ? null : deltaInvert ? deltaNum < 0 : deltaNum > 0
+  const deltaFlat = deltaNum !== null && Math.abs(deltaNum) < 0.05
 
   return (
     <div
@@ -107,6 +112,26 @@ export default function StatCard({ label, value, sub, color = 'gold', icon: Icon
             fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
           }}>
             {sub}
+          </div>
+        )}
+
+        {deltaNum !== null && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: '0.6rem', fontWeight: 600, lineHeight: 1,
+            fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif",
+            color: deltaFlat ? 'var(--text-muted)' : deltaGood ? '#4ade80' : '#f87171',
+          }}>
+            {deltaFlat ? (
+              <span style={{ opacity: 0.7 }}>± {Math.abs(deltaNum).toFixed(1)}%</span>
+            ) : (
+              <>
+                {deltaNum > 0
+                  ? <TrendingUp size={11} />
+                  : <TrendingDown size={11} />}
+                {Math.abs(deltaNum).toFixed(1)}% vs prev
+              </>
+            )}
           </div>
         )}
       </div>

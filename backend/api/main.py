@@ -18,7 +18,7 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import brands, clerk_webhook, oauth, chat, shopify_webhook, policy_documents, office, customer_support_webhook, courier
+from api.routers import brands, clerk_webhook, oauth, chat, shopify_webhook, policy_documents, office, customer_support_webhook, courier, dashboard
 from api.routers.webchat import webchat_app
 from api.routers.agents import (
     inventory as inventory_agent,
@@ -109,6 +109,7 @@ app.include_router(shopify_webhook.router)
 app.include_router(policy_documents.router)
 app.include_router(office.router)
 app.include_router(customer_support_webhook.router)
+app.include_router(dashboard.router)
 app.include_router(inventory_agent.router)
 app.include_router(sales_agent.router)
 app.include_router(marketing_agent.router)

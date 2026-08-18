@@ -6,12 +6,11 @@ langchain-mcp-adapters
 langgraph-checkpoint-redis
 langchain-mistralai
 langchain-google-genai
-langchain-anthropic
 langchain-text-splitters
 
 chromadb
 langchain-chroma
-langchain-huggingface
+# langchain-huggingface
 
 pydantic
 pydantic[email]
