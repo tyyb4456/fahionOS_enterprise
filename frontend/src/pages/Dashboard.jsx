@@ -22,6 +22,7 @@ const AGENT_META = {
   research:        { label: 'Research',   color: '#a855f7' },
   supplier:        { label: 'Supplier',   color: '#38bdf8' },
   customer_support:{ label: 'Support',    color: '#e879f9' },
+  product:        { label: 'Product',    color: '#f472b6' },
 }
 
 const STATS = [
@@ -191,7 +192,7 @@ export default function Dashboard() {
         </div>
         {Object.keys(AGENT_META).map(id => {
           const m   = AGENT_META[id]
-          const st  = live?.agents?.[id]?.status
+          const st  = live?.agents?.[id]?.status ?? live?.agents?.[`${id}_agent`]?.status
           const busy = !!st && st !== 'idle'
           return (
             <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: '0.66rem', color: 'var(--text-secondary)', letterSpacing: '0.03em' }}>

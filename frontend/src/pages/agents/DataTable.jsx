@@ -6,6 +6,7 @@ const MONEY_KEYS = new Set([
   'related_amount', 'current_budget', 'recommended_budget', 'our_price', 'competitor_price',
   'recommended_price', 'initial_offer', 'counter_offer', 'final_price', 'margin',
   'total_spent', 'budget', 'refund_amount', 'total_discount', 'cost_price',
+  'target_price', 'expected_margin',
 ])
 
 const DATE_TIME_KEYS = new Set([

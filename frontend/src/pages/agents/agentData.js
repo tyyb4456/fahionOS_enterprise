@@ -1,5 +1,5 @@
 import {
-  Package, TrendingUp, Megaphone, Coins, FlaskConical, Truck, Headphones,
+  Package, TrendingUp, Megaphone, Coins, FlaskConical, Truck, Headphones, Shirt,
 } from 'lucide-react'
 
 // Per-agent command-center configuration. Every section maps 1:1 to a
@@ -110,6 +110,20 @@ export const AGENTS = [
       { label: 'Exchanges', path: '/api/v1/agents/customer-support/exchanges' },
       { label: 'Insights', path: '/api/v1/agents/customer-support/insights' },
       { label: 'Customer feedback', path: '/api/v1/agents/customer-support/feedback' },
+    ],
+  },
+  {
+    id: 'product',
+    label: 'Product',
+    color: '#f472b6',
+    Icon: Shirt,
+    role: 'Proposals, collections, lifecycle & merchandising insights',
+    runBody: { task_type: 'create_product_opportunity' },
+    sections: [
+      { label: 'Proposals', path: '/api/v1/agents/product/proposals' },
+      { label: 'Collections', path: '/api/v1/agents/product/collections' },
+      { label: 'Lifecycle', path: '/api/v1/agents/product/lifecycle' },
+      { label: 'Insights', path: '/api/v1/agents/product/insights' },
     ],
   },
 ]

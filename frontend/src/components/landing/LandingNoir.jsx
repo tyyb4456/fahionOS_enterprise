@@ -301,7 +301,7 @@ export default function LandingNoir() {
           </h1>
 
           <p className="text-[1.05rem] font-light leading-[1.8] text-[#f2ede4]/65 max-w-120 mb-12">
-            Seven autonomous agents run your store end-to-end — inventory, sales, marketing, finance, research, procurement, and customer support — planned by an AI supervisor, guarded by your own brand policies.
+            Eight autonomous agents run your store end-to-end — inventory, sales, marketing, finance, research, procurement, customer support, and product & merchandising — planned by an AI supervisor, guarded by your own brand policies.
           </p>
 
           <div className="flex items-center gap-4 sm:gap-7 flex-wrap">
@@ -351,7 +351,7 @@ export default function LandingNoir() {
           {/* Stat bar */}
           <div className="absolute bottom-12 left-12 z-5 flex items-stretch bg-[#1e1e1e]/52 backdrop-blur-[20px] backdrop-saturate-140 border border-[#d4d4d8]/20 rounded-[14px] overflow-hidden divide-x divide-[#d4d4d8]/15 reveal-on-scroll reveal-delay-2">
             {[
-              { label: 'Agents', val: '7' },
+              { label: 'Agents', val: '8' },
               { label: 'Uptime', val: '24/7' },
               { label: 'Channels', val: '4' },
             ].map(s => (
@@ -387,7 +387,7 @@ export default function LandingNoir() {
           <div className="mb-16 reveal-on-scroll">
             <div className="font-cormorant text-[clamp(2.8rem,4.8vw,4.8rem)] font-light leading-[1.05] m-[0_0_20px] text-[#f0eeeb]">The <em className="text-[#d4d4d8] italic font-normal">Atelier</em></div>
             <p className="text-[1.02rem] font-light leading-[1.8] text-[#f0eeeb]/60 max-w-[580px] m-0">
-              Seven specialized operators, each running its own LangGraph pipeline and taking real action on your store — all planned and chained by a single AI supervisor.
+              Eight specialized operators, each running its own LangGraph pipeline and taking real action on your store — all planned and chained by a single AI supervisor.
             </p>
           </div>
 
@@ -567,7 +567,7 @@ export default function LandingNoir() {
           <div className="mb-16 reveal-on-scroll">
             <div className="font-cormorant text-[clamp(2.8rem,4.8vw,4.8rem)] font-light leading-[1.05] m-[0_0_20px] text-[#f0eeeb]">The <em className="text-[#d4d4d8] italic font-normal">Command Center</em></div>
             <p className="text-[1.02rem] font-light leading-[1.8] text-[#f0eeeb]/60 max-w-[580px] m-0">
-              One AI supervisor. Seven operators. A living office where the whole team works in real time.
+              One AI supervisor. Eight operators. A living office where the whole team works in real time.
             </p>
           </div>
 
@@ -769,7 +769,7 @@ export default function LandingNoir() {
           <em className="text-[#d4d4d8] italic font-normal">Without Losing Control</em>
         </div>
         <p className="text-[1.05rem] font-light text-[#f0eeeb]/55 mb-14 relative z-[1] reveal-on-scroll reveal-delay-1">
-          Zero coding required. Seven agents execute real work on your store — every high-risk move checked by the Finance agent and reported straight to you.
+          Zero coding required. Eight agents execute real work on your store — every high-risk move checked by the Finance agent and reported straight to you.
         </p>
 
         <div className="flex gap-8 flex-wrap justify-center mb-14 relative z-[1] max-[640px]:flex-col max-[640px]:items-center max-[640px]:gap-3 reveal-on-scroll reveal-delay-2">

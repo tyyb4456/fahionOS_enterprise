@@ -13,6 +13,8 @@ const SOURCE_COLORS = {
   finance:   '#facc15',
   research:  '#a855f7',
   supplier:  '#38bdf8',
+  customer_support: '#e879f9',
+  product:   '#f472b6',
 }
 
 export const SOURCE_META = {
@@ -22,6 +24,8 @@ export const SOURCE_META = {
   finance_agent:   { label: 'Finance',   color: SOURCE_COLORS.finance },
   research_agent:  { label: 'Research',  color: SOURCE_COLORS.research },
   supplier_agent:  { label: 'Supplier',  color: SOURCE_COLORS.supplier },
+  customer_support_agent: { label: 'Customer Support', color: SOURCE_COLORS.customer_support },
+  product_agent:   { label: 'Product',   color: SOURCE_COLORS.product },
   'main agent':    { label: 'Supervisor', color: GOLD },
 }
 

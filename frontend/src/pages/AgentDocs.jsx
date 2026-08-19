@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApi } from '../api/client'
 import {
-  Package, TrendingUp, Megaphone, Coins, FlaskConical, Truck, Headphones,
+  Package, TrendingUp, Megaphone, Coins, FlaskConical, Truck, Headphones, Shirt,
   FileUp, FileText, Trash2, Loader2, Check,
 } from 'lucide-react'
 import { PageHeader } from '../components/ui'
@@ -15,6 +15,7 @@ const AGENTS = [
   { id: 'research',         label: 'Research',         Icon: FlaskConical, color: '#a855f7' },
   { id: 'supplier',         label: 'Supplier',         Icon: Truck,       color: '#38bdf8' },
   { id: 'customer_support', label: 'Customer Support', Icon: Headphones,  color: '#e879f9' },
+  { id: 'product',         label: 'Product',          Icon: Shirt,       color: '#f472b6' },
 ]
 
 const HINTS = {
@@ -25,6 +26,7 @@ const HINTS = {
   research: 'Market focus areas, competitor watchlist, category priors',
   supplier: 'Supplier expectations, quality standards, procurement rules',
   customer_support: 'Return/exchange policy, response SOP, tone guidelines',
+  product: 'Product strategy, merchandising guidelines, collection planning rules',
 }
 
 const fmtDate = (iso) => {

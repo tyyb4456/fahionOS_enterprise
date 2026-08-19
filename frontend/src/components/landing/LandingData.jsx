@@ -1,12 +1,12 @@
 import {
-  Package, TrendingUp, Megaphone, Wallet, Search, Truck, MessageCircle,
+  Package, TrendingUp, Megaphone, Wallet, Search, Truck, MessageCircle, Shirt,
 } from 'lucide-react'
 import {
   SiMeta, SiInstagram, SiFacebook, SiWhatsapp,
   SiShopify, SiGoogle, SiTiktok, SiRedis,
 } from '@icons-pack/react-simple-icons'
 
-// ── 7 agents, as deployed in the backend, in supervisor delegation order ──────
+// ── 8 agents, as deployed in the backend, in supervisor delegation order ──────
 // `mode`: 'autonomous' — acts on its own with guardrails · 'guarded' — records and
 // advises; high-stakes changes are checked with Finance / escalated to the founder.
 export const agents = [
@@ -80,11 +80,21 @@ export const agents = [
     color: '#34d399',
     mode: 'guarded',
   },
+  {
+    step: '08',
+    icon: Shirt,
+    title: 'Product',
+    badge: 'product_agent',
+    desc: 'Head of Product & Merchandising. Sits between market intelligence and the catalog — checks brand fit, competition, supplier feasibility, and real margin before proposing anything, plans variant mixes, collections, and initial production quantities from live sales data, and tracks each product\'s lifecycle from idea to archive.',
+    exec: 'Proposals · Collections · Lifecycle',
+    color: '#f472b6',
+    mode: 'guarded',
+  },
 ]
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 export const stats = [
-  { value: '7',   label: 'Specialized Agents', suffix: '' },
+  { value: '8',   label: 'Specialized Agents', suffix: '' },
   { value: '24',  label: 'Hour Autonomy',       suffix: '/7' },
   { value: '2',   label: 'Agent Layers',        suffix: '' },
   { value: '4',   label: 'Support Channels',    suffix: '' },
@@ -159,7 +169,7 @@ export const supervisor = {
   title: 'The Supervisor',
   role: 'Chief Executive Agent',
   color: '#d4d4d8',
-  desc: 'The LangGraph brain of the platform. It reads brand memory, plans every run, and delegates to the seven operators — chaining them across domains and consulting Finance before any big spend.',
+  desc: 'The LangGraph brain of the platform. It reads brand memory, plans every run, and delegates to the eight operators — chaining them across domains and consulting Finance before any big spend.',
   bullets: [
     'Long-term brand memory that persists across every conversation',
     'Chains agents across domains — research feeds marketing, sales feeds inventory',
@@ -205,7 +215,7 @@ export const howItWorksSteps = [
   {
     step: '02',
     title: 'The Supervisor plans, agents execute',
-    desc: 'The deep-agent supervisor reads your brand memory and plans each run, then delegates to the seven operators. Each runs its own LangGraph pipeline — placing orders, publishing posts, and launching campaigns, with guardrails.',
+    desc: 'The deep-agent supervisor reads your brand memory and plans each run, then delegates to the eight operators. Each runs its own LangGraph pipeline — placing orders, publishing posts, and launching campaigns, with guardrails.',
   },
   {
     step: '03',
@@ -215,7 +225,7 @@ export const howItWorksSteps = [
   {
     step: '04',
     title: 'Chat with your AI supervisor',
-    desc: 'Ask FashionOS anything in natural language. It holds long-term brand memory, reads live pipeline results, and can spawn and chain the seven agents in a single conversation.',
+    desc: 'Ask FashionOS anything in natural language. It holds long-term brand memory, reads live pipeline results, and can spawn and chain the eight agents in a single conversation.',
   },
   {
     step: '05',
