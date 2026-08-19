@@ -48,6 +48,7 @@ class ProductBusinessContext(TypedDict, total=False):
     previous_proposals: List[Dict[str, Any]]
     previous_collections: List[Dict[str, Any]]
     product_lifecycle_snapshot: List[Dict[str, Any]]
+    customer_feedback_signals: Dict[str, Any]   # ← new: return-reason patterns + support tickets
 
 
 class ProductProposalOut(TypedDict, total=False):

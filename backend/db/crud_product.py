@@ -3,7 +3,10 @@ Product / Merchandising Agent — read/write layer.
 
 Table ownership:
   - reads but doesn't own: Product/ProductVariant (Shopify catalog mirror),
-    OrderLineItem/SalesOrder (variant-level sales breakdown), InventoryAlert
+    OrderLineItem/SalesOrder (variant-level sales breakdown), Return
+    (Shopify refund/return records — return-reason pattern signal),
+    ExchangeRecord/SupportTicket/SupportInsight (Customer Support Agent's
+    outputs — see the "Customer feedback" section below), InventoryAlert
     (Inventory's outputs), ProductOpportunity/MarketTrend/CompetitorAnalysis
     (Research's outputs), MarketingInsight/MarketingCampaign (Marketing's
     outputs), Supplier/SupplierQuote (Supplier's outputs). Reading another
@@ -19,6 +22,26 @@ ProductOpportunity table — the same "shared Postgres, reference across
 agents' tables instead of duplicating them" pattern already used by
 ReorderRecommendation.purchase_order_id and Supplier's shared writes into
 Inventory's own tables.
+
+Customer feedback signal (confirmed against the real Customer Support
+Agent schema — db/models.py / db/crud_customer_support.py):
+  - Return.return_reason (Shopify-synced refund note, has a real `sku`
+    column) — categorized via agents/product/analytics.py's keyword
+    matcher into sizing/defect/wrong_item/changed_mind/shipping/other.
+  - ExchangeRecord.original_sku -> new_sku — the strongest sizing-
+    confusion signal available: a SKU customers keep exchanging OUT of is
+    hard evidence, not inferred from free text.
+  - SupportInsight where category="product" — Customer Support's own
+    already-computed analysis; read directly rather than re-deriving
+    anything from raw ticket/conversation text (same pattern as reading
+    Research's MarketTrend/ProductOpportunity elsewhere in this agent).
+  - SupportTicket.issue_type volume, as lightweight overall context.
+    Deliberately NOT broken down per-SKU: SupportTicket has no sku column,
+    and RefundRecord (which has amount/reason) is only order-level too —
+    forcing either into a per-product breakdown via a shopify_order_id
+    join would silently misattribute a refund/ticket to every line item
+    on that order. Left out rather than faking precision the schema
+    doesn't support.
 """
 from __future__ import annotations
 
@@ -31,10 +54,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import (
-    Collection, CompetitorAnalysis, InventoryAlert, MarketingCampaign,
-    MarketingInsight, MarketTrend, MerchandisingInsight, OrderLineItem,
-    Product, ProductLifecycle, ProductOpportunity, ProductProposal,
-    ProductVariant, SalesOrder, Supplier, SupplierQuote,
+    Collection, CompetitorAnalysis, ExchangeRecord, InventoryAlert,
+    MarketingCampaign, MarketingInsight, MarketTrend, MerchandisingInsight,
+    OrderLineItem, Product, ProductLifecycle, ProductOpportunity,
+    ProductProposal, ProductVariant, Return, SalesOrder, Supplier,
+    SupplierQuote, SupportInsight, SupportTicket,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,6 +84,7 @@ async def get_business_context(session: AsyncSession, brand_id: str, category: O
         "previous_proposals": await _recent_proposals(session, brand_id, limit=8),
         "previous_collections": await _recent_collections(session, brand_id, limit=5),
         "product_lifecycle_snapshot": await _lifecycle_snapshot(session, brand_id, limit=15),
+        "customer_feedback_signals": await _customer_feedback_signals(session, brand_id, days=90),
     }
 
 
@@ -234,6 +259,94 @@ async def _lifecycle_snapshot(session: AsyncSession, brand_id: str, limit: int =
     ]
 
 
+# ── Customer feedback signal (real Customer Support Agent tables) ─────────
+
+async def _return_pattern_signals(session: AsyncSession, brand_id: str, days: int = 90, limit_products: int = 15) -> list[dict]:
+    """Return.return_reason (Shopify-synced refund note, db/models.py,
+    populated by api/routers/shopify_webhook.py) categorized and grouped
+    by product. Real sku column, no join guesswork needed."""
+    from agents.product import analytics as product_analytics
+
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    stmt = select(Return.sku, Return.product_name, Return.return_reason).where(
+        Return.brand_id == brand_id, Return.refunded_at.is_not(None), Return.refunded_at >= since,
+    )
+    rows = (await session.execute(stmt)).all()
+    returns = [{"sku": r.sku, "product_name": r.product_name, "return_reason": r.return_reason or ""} for r in rows]
+    return product_analytics.summarize_return_patterns(returns)[:limit_products]
+
+
+async def _exchange_pattern_signals(session: AsyncSession, brand_id: str, days: int = 90, limit_skus: int = 15) -> list[dict]:
+    """ExchangeRecord.original_sku -> new_sku (Customer Support Agent's
+    create_exchange, db/crud_customer_support.py), grouped by the SKU
+    customers exchanged OUT of. This is the strongest sizing-confusion
+    signal available — a real, repeated exchange pattern, not an inferred
+    one from free text."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    stmt = (
+        select(ExchangeRecord.original_sku, ExchangeRecord.new_sku, func.count().label("count"))
+        .where(ExchangeRecord.brand_id == brand_id, ExchangeRecord.created_at >= since)
+        .group_by(ExchangeRecord.original_sku, ExchangeRecord.new_sku)
+    )
+    rows = (await session.execute(stmt)).all()
+
+    by_original: dict[str, dict] = {}
+    for r in rows:
+        entry = by_original.setdefault(
+            r.original_sku, {"original_sku": r.original_sku, "total_exchanges": 0, "exchanged_to": []},
+        )
+        entry["total_exchanges"] += r.count
+        entry["exchanged_to"].append({"sku": r.new_sku, "count": r.count})
+
+    ranked = sorted(by_original.values(), key=lambda e: -e["total_exchanges"])
+    for entry in ranked:
+        entry["exchanged_to"].sort(key=lambda x: -x["count"])
+    return ranked[:limit_skus]
+
+
+async def _support_insight_signals(session: AsyncSession, brand_id: str, limit: int = 10) -> list[dict]:
+    """Customer Support Agent's own SupportInsight rows where
+    category='product' — read their analysis directly rather than
+    re-deriving anything from raw ticket/conversation text, same pattern
+    as reading Research's MarketTrend/ProductOpportunity elsewhere in
+    this agent."""
+    stmt = (
+        select(SupportInsight)
+        .where(SupportInsight.brand_id == brand_id, SupportInsight.category == "product")
+        .order_by(SupportInsight.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        {"severity": i.severity, "message": i.message, "confidence": i.confidence}
+        for i in (await session.execute(stmt)).scalars().all()
+    ]
+
+
+async def _ticket_volume_by_issue_type(session: AsyncSession, brand_id: str, days: int = 90) -> list[dict]:
+    """Lightweight overall ticket volume by issue_type — SupportTicket has
+    no sku column, so this is deliberately NOT broken down per-product
+    (see module docstring). Useful only as general context, e.g. "12
+    return tickets, 8 product_question tickets in the last 90 days"."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    stmt = (
+        select(SupportTicket.issue_type, func.count().label("count"))
+        .where(SupportTicket.brand_id == brand_id, SupportTicket.created_at >= since)
+        .group_by(SupportTicket.issue_type)
+        .order_by(func.count().desc())
+    )
+    rows = (await session.execute(stmt)).all()
+    return [{"issue_type": r.issue_type, "count": r.count} for r in rows]
+
+
+async def _customer_feedback_signals(session: AsyncSession, brand_id: str, days: int = 90) -> dict:
+    return {
+        "return_reason_patterns": await _return_pattern_signals(session, brand_id, days=days),
+        "exchange_patterns_by_sku": await _exchange_pattern_signals(session, brand_id, days=days),
+        "support_insights_product": await _support_insight_signals(session, brand_id),
+        "support_ticket_volume_by_type": await _ticket_volume_by_issue_type(session, brand_id, days=days),
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Tool-backed lookups (called on-demand from the ReAct loop, see
 # agents/product/tools.py)
@@ -330,6 +443,10 @@ async def find_feasible_suppliers(session: AsyncSession, brand_id: str, query: s
             "latest_quote_unit_price": latest_quote.unit_price if latest_quote else None,
         })
     return results
+
+
+async def get_customer_feedback_signals(session: AsyncSession, brand_id: str, days: int = 90) -> dict:
+    return await _customer_feedback_signals(session, brand_id, days=days)
 
 
 # ── operational writes — real, immediate DB changes made mid-ReAct-loop by

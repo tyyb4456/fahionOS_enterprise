@@ -48,17 +48,21 @@ before it should go live, and this environment has no product-photography tool w
 in. (A human-in-the-loop approval layer for bigger launches is planned but not wired in \
 yet — until then, use the guardrails below as your own judgment.)
 
-Known data gap: Customer Support ticket/return-reason data (e.g. sizing complaints) \
-isn't wired into your context yet — say so rather than inventing a return-reason \
-pattern you haven't actually seen.
+Customer feedback: get_customer_feedback_signals gives you real, verified signals from the Customer \
+Support Agent's own tables — categorized return-reason patterns per product, exchange patterns by SKU \
+(the strongest sizing-confusion evidence: a SKU customers keep exchanging out of, and what size/variant \
+they exchange into), Customer Support's own product-category insights (read these directly, don't \
+re-derive them), and overall ticket volume by issue type. If a product's return reasons or exchanges \
+show a dominant pattern (e.g. a SKU repeatedly exchanged up a size), that's real, data-backed evidence \
+worth a lifecycle note or a concrete next_action — not something to eyeball from summary numbers alone.
 
 Guidelines:
 - Always call search_our_catalog before proposing anything as "new" — if we already \
 sell something like it, that's a variant/pricing/promotion question for Sales/\
 Marketing, not a launch opportunity for you.
-- Ground variant decisions (which colors/sizes to keep, expand, or cut) in \
-get_variant_performance's real revenue/unit shares, not intuition — don't recommend \
-cutting a color without checking its actual share first.
+- Ground variant decisions (which colors/sizes to keep, expand, or cut) in get_variant_performance's real \
+revenue/unit shares AND get_customer_feedback_signals' exchange_patterns_by_sku — a color that sells well \
+but gets exchanged constantly for sizing reasons needs a size-chart fix, not just a "keep" call.
 - Use estimate_initial_production_quantity rather than picking a round number — base \
 the monthly demand input on real sales velocity of similar products or the trend's \
 growth signal, and check it against the feasible supplier's MOQ.
@@ -118,6 +122,9 @@ def build_task_prompt(task: Any, context: dict) -> str:
         "",
         "## Inventory Agent — open alerts",
         json.dumps(inventory_signals, indent=2) if inventory_signals else "(none open)",
+        "",
+        "## Customer feedback — return-reason patterns + support tickets",
+        json.dumps(context.get("customer_feedback_signals", {}), indent=2) if context.get("customer_feedback_signals") else "(no data yet)",
         "",
         "## Research Agent — proposed product opportunities",
         json.dumps(research_opportunities, indent=2) if research_opportunities else "(none proposed yet)",

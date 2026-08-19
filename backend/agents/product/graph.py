@@ -39,10 +39,16 @@ own Shopify write tools in the same server) — the agent calls those
 directly, then records the outcome via update_proposal_status /
 update_product_lifecycle_stage.
 
-Known gap: Customer Support Agent's tables aren't wired into this agent's
-context yet (support-ticket/return-reason data would sharpen variant and
-sizing decisions — but its models weren't available when this agent was
-built). Flagged in prompt.py rather than guessed at.
+Customer feedback note: wired against the real, confirmed Customer
+Support Agent schema (db/models.py::Return/ExchangeRecord/SupportTicket/
+SupportInsight, db/crud_customer_support.py) — return-reason patterns and
+exchange-by-SKU patterns are precise (both tables have a real sku column);
+Customer Support's own SupportInsight (category="product") rows are read
+directly rather than re-derived; ticket volume is surfaced only at the
+issue_type level, not per-SKU, since SupportTicket has no sku column and
+forcing one via an order-level join would misattribute a ticket to every
+line item on that order.
+
 """
 from __future__ import annotations
 

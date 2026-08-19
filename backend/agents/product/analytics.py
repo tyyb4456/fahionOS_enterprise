@@ -1,11 +1,11 @@
 """
 Lightweight, dependency-light merchandising analytics for the Product
-Agent — opportunity scoring, initial production quantity, and variant-mix
-ranking. Same philosophy as agents/inventory/forecasting.py,
-agents/sales/analytics.py, agents/finance/analytics.py,
-agents/research/analytics.py, agents/supplier/analytics.py: deterministic
-math the LLM shouldn't be eyeballing, not a replacement for real demand
-modeling.
+Agent — opportunity scoring, initial production quantity, variant-mix
+ranking, and return-reason pattern detection. Same philosophy as
+agents/inventory/forecasting.py, agents/sales/analytics.py,
+agents/finance/analytics.py, agents/research/analytics.py,
+agents/supplier/analytics.py: deterministic math the LLM shouldn't be
+eyeballing, not a replacement for real demand modeling.
 
 score_product_opportunity mirrors the design doc's JSON shape almost
 exactly (market_demand, brand_fit, competition, supplier_feasibility,
@@ -128,3 +128,75 @@ def rank_variant_mix(variant_sales: list[dict], cut_threshold_pct: float = 5.0, 
 
     ranked.sort(key=lambda r: -r["revenue_share_pct"])
     return ranked
+
+
+# ── Return-reason pattern detection ────────────────────────────────────────
+# Real signal, real schema (db/models.py::Return, Shopify-synced refund
+# notes) — this is the design doc's "Return reasons ... 38% of hoodie
+# returns are caused by sizing confusion" example, made concrete. Keyword
+# categorization is deliberately simple/mechanical rather than an LLM call
+# — same reasoning as every other deterministic helper in this file.
+
+_RETURN_REASON_KEYWORDS: dict[str, list[str]] = {
+    "sizing": ["size", "sizing", "fit", "fits", "small", "large", "tight", "loose", "narrow", "wide"],
+    "defect": ["defect", "defective", "damage", "damaged", "broken", "quality", "torn", "tear", "stain", "faulty"],
+    "wrong_item": ["wrong item", "wrong product", "incorrect item", "different item", "mismatched"],
+    "changed_mind": ["changed my mind", "no longer need", "don't want", "not needed", "ordered by mistake"],
+    "shipping": ["late", "delayed", "shipping", "delivery took", "arrived late"],
+}
+
+
+def categorize_return_reason(reason_text: str) -> str:
+    """Best-effort keyword categorization of Shopify's free-text refund
+    note (Return.return_reason) into a fixed set of buckets — the same
+    granularity a support agent would use, without needing an LLM call
+    for something this mechanical. Falls back to 'other' / 'unspecified'."""
+    text = (reason_text or "").strip().lower()
+    if not text:
+        return "unspecified"
+    for category, keywords in _RETURN_REASON_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            return category
+    return "other"
+
+
+def summarize_return_patterns(returns: list[dict], dominant_threshold_pct: float = 25.0) -> list[dict]:
+    """
+    returns: [{"sku", "product_name", "return_reason"}, ...] for one
+    product or a whole catalog window.
+
+    Groups by product_name, categorizes each return_reason, and returns
+    per-product category share % — flags a 'dominant_issue' when one
+    category crosses dominant_threshold_pct (e.g. the design doc's "38% of
+    hoodie returns are caused by sizing confusion" example). This is a
+    real product decision, not just a support-ticket stat, which is why it
+    lives here rather than only in Customer Support's own tables.
+    """
+    by_product: dict[str, dict[str, int]] = {}
+    totals: dict[str, int] = {}
+
+    for r in returns:
+        product = r.get("product_name") or r.get("sku") or "Unknown product"
+        category = categorize_return_reason(r.get("return_reason", ""))
+        by_product.setdefault(product, {})
+        by_product[product][category] = by_product[product].get(category, 0) + 1
+        totals[product] = totals.get(product, 0) + 1
+
+    summary = []
+    for product, counts in by_product.items():
+        total = totals[product] or 1
+        breakdown = [
+            {"category": cat, "count": cnt, "share_pct": round(cnt / total * 100, 1)}
+            for cat, cnt in sorted(counts.items(), key=lambda kv: -kv[1])
+        ]
+        dominant = next((b for b in breakdown if b["share_pct"] >= dominant_threshold_pct), None)
+        summary.append({
+            "product": product,
+            "total_returns": total,
+            "breakdown": breakdown,
+            "dominant_issue": dominant["category"] if dominant else None,
+            "dominant_issue_share_pct": dominant["share_pct"] if dominant else None,
+        })
+
+    summary.sort(key=lambda s: -s["total_returns"])
+    return summary

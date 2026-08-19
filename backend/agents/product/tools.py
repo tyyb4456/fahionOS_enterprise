@@ -55,6 +55,7 @@ def build_internal_tools(brand_id: str) -> list[StructuredTool]:
         _make_competitor_analysis_tool(brand_id),
         _make_inventory_signals_tool(brand_id),
         _make_marketing_signals_tool(brand_id),
+        _make_customer_feedback_tool(brand_id),  
         _make_margin_lookup_tool(brand_id),
         _make_supplier_feasibility_tool(brand_id),
         _make_score_opportunity_tool(),
@@ -197,6 +198,34 @@ def _make_marketing_signals_tool(brand_id: str) -> StructuredTool:
         coroutine=_run,
     )
 
+# ── get_customer_feedback_signals ─────────────────────────────────────────
+
+class _FeedbackArgs(BaseModel):
+    days: int = Field(default=90, description="Look-back window in days.")
+
+
+def _make_customer_feedback_tool(brand_id: str) -> StructuredTool:
+    async def _run(days: int = 90) -> dict:
+        async with AsyncSessionLocal() as session:
+            return await crud.get_customer_feedback_signals(session, brand_id, days=days)
+
+    return StructuredTool.from_function(
+        name="get_customer_feedback_signals",
+        description=(
+            "Real customer feedback grounding for a variant/sizing/quality decision, from the Customer "
+            "Support Agent's own tables: return_reason_patterns (categorized Shopify refund notes per "
+            "product — sizing/defect/wrong_item/changed_mind/shipping/other, with a dominant_issue flagged "
+            "when one category crosses ~25% share); exchange_patterns_by_sku (the strongest sizing signal "
+            "— which SKUs customers actually exchange OUT of, and what they exchange into, e.g. a size-up "
+            "pattern); support_insights_product (Customer Support's own product-category findings — read "
+            "these, don't re-derive them); and support_ticket_volume_by_type (overall ticket counts by "
+            "issue_type, not per-SKU — SupportTicket has no sku column, so don't imply per-product ticket "
+            "precision that isn't there). Use this before recommending a size-chart change, a variant cut, "
+            "or calling something a 'quality issue'."
+        ),
+        args_schema=_FeedbackArgs,
+        coroutine=_run,
+    )
 
 # ── get_margin_for_sku / check_supplier_feasibility ───────────────────────
 
