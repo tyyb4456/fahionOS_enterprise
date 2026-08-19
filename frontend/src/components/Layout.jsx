@@ -1,21 +1,36 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
-import { LayoutDashboard, MessageSquare, Menu, X, Sun, Moon, Building2, BrainCircuit, FileText, Settings } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, Menu, X, Sun, Moon, Building2, BrainCircuit, FileText, Settings, CheckSquare } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
+import { useApi } from '../api/client'
 
 const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/office',    icon: Building2,       label: 'Office'   },
-  { to: '/chat',      icon: MessageSquare,   label: 'Chat'     },
-  { to: '/agents',    icon: BrainCircuit,    label: 'Agents'   },
-  { to: '/docs',      icon: FileText,        label: 'Documents'},
-  { to: '/setup',     icon: Settings,        label: 'Setup'    },
+  { to: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard'  },
+  { to: '/office',     icon: Building2,       label: 'Office'     },
+  { to: '/chat',       icon: MessageSquare,   label: 'Chat'       },
+  { to: '/approvals',  icon: CheckSquare,     label: 'Approvals'  },
+  { to: '/agents',     icon: BrainCircuit,    label: 'Agents'     },
+  { to: '/docs',       icon: FileText,        label: 'Documents'  },
+  { to: '/setup',      icon: Settings,        label: 'Setup'      },
 ]
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [pending, setPending] = useState(0)
   const { theme, toggleTheme } = useTheme()
+  const api = useApi()
+
+  useEffect(() => {
+    let cancelled = false
+    const poll = () =>
+      api.get('/api/v1/approvals/counts')
+        .then(d => { if (!cancelled) setPending(d.total_pending || 0) })
+        .catch(() => {})
+    poll()
+    const t = setInterval(poll, 30000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [api])
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
@@ -121,9 +136,21 @@ export default function Layout() {
                   onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = '' } }}
                 >
                   <Icon size={15} style={{ color: isActive ? 'var(--gold)' : 'inherit', flexShrink: 0 }} />
-                  <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.78rem', letterSpacing: '0.02em' }}>
+                  <span style={{ fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", fontSize: '0.78rem', letterSpacing: '0.02em', flex: 1 }}>
                     {label}
                   </span>
+                  {to === '/approvals' && pending > 0 && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
+                      background: pending > 0 ? 'rgba(250,204,21,0.15)' : 'transparent',
+                      border: `1px solid ${pending > 0 ? 'rgba(250,204,21,0.45)' : 'transparent'}`,
+                      color: '#facc15', fontSize: '0.55rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                      flexShrink: 0,
+                    }}>
+                      {pending}
+                    </span>
+                  )}
                 </div>
               )}
             </NavLink>

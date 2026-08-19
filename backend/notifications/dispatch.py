@@ -35,6 +35,56 @@ RESEND_API_KEY    = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "alerts@fashionos.app")
 
 
+async def notify_approval_required(brand_id: str, kind: str, title: str, detail: str = "") -> dict:
+    """Prompt the brand owner that an item just entered the approval queue.
+
+    Called at creation time by the crud functions that write pending
+    reorder/refund/exchange records — so the owner hears about it in
+    WhatsApp/email even if they're not staring at the dashboard. Degrades
+    to a log when notification channels aren't configured.
+    """
+    return await notify_brand_owner(
+        brand_id, "Approvals",
+        f"Approval needed — {kind}: {title}",
+        f"{title}\n\n{detail}\n\nOpen the Approval Center in your dashboard to review or reject it."
+        if detail else
+        f"{title}\n\nOpen the Approval Center in your dashboard to review or reject it.",
+    )
+
+
+async def notify_brand_owner(brand_id: str, agent_name: str, subject: str, message: str) -> dict:
+    """Look up a brand's owner contacts and send the alert on both channels.
+
+    Same purpose as agents/common/notify_tools.py::make_notify_brand_owner_tool
+    but callable directly from non-agent code (routers, tasks) without a tool
+    object. Local imports avoid a load-time cycle with db/session.
+    """
+    from sqlalchemy import select
+    from db.models import Brand
+    from db.session import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        brand = (await session.execute(
+            select(Brand).where(Brand.brand_id == brand_id)
+        )).scalar_one_or_none()
+    if not brand:
+        logger.error("[notify:owner] brand_id=%s not found", brand_id)
+        return {"sent": False, "error": "Brand not found."}
+
+    results = []
+    if brand.brand_owner_whatsapp:
+        results.append(await send_whatsapp(
+            brand.brand_owner_whatsapp, f"[{agent_name}] {subject}\n\n{message}"
+        ))
+    if brand.brand_owner_email:
+        results.append(await send_email(
+            brand.brand_owner_email, f"[FashionOS – {agent_name}] {subject}", message
+        ))
+    if not results:
+        return {"sent": False, "error": "No brand owner contact on file."}
+    return {"sent": any(r.get("sent") for r in results), "results": results}
+
+
 async def send_whatsapp(to: str, message: str, from_phone_number_id: Optional[str] = None) -> dict:
     """Send a WhatsApp text message via the Meta WhatsApp Business Cloud API.
 

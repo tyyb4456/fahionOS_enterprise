@@ -952,3 +952,83 @@ class SupportInsight(Base):
     message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
     confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
     created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Product / Merchandising Agent — the brand's catalog decisions.
+# ProductProposal.source_opportunity_id is a light FK into Research's own
+# ProductOpportunity table — same "shared Postgres, reference across
+# agents' tables" pattern ReorderRecommendation.purchase_order_id and
+# Supplier's shared PurchaseOrder writes already use.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ProductProposal(Base):
+    __tablename__ = "product_proposals"
+
+    id:                           Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:                     Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    product_name:                 Mapped[str]       = mapped_column(String(255), nullable=False)
+    category:                     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    description:                  Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    variants:                     Mapped[list]      = mapped_column(JSON, nullable=False, default=list)   # e.g. ["Black","Khaki","Olive"]
+    sizes:                        Mapped[list]      = mapped_column(JSON, nullable=False, default=list)   # e.g. ["S","M","L","XL"]
+    target_price:                 Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    market_demand:                Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    brand_fit:                    Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    competition:                  Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    supplier_feasibility:         Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    expected_margin:              Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    composite_score:               Mapped[float]     = mapped_column(Float, nullable=False, default=0.0)
+    recommended_initial_quantity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status:                       Mapped[str]       = mapped_column(String(30), nullable=False, default="proposed")
+    # proposed|approved|rejected|in_development|launched
+    reason:                       Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    source_opportunity_id:        Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("product_opportunities.id"), nullable=True)
+    # Set once create_product (shopify-mcp) actually creates the live Shopify product.
+    shopify_product_id:           Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    created_at:                   Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at:                   Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class Collection(Base):
+    __tablename__ = "collections"
+
+    id:            Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:      Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    name:          Mapped[str]       = mapped_column(String(255), nullable=False)
+    season:        Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    theme:         Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    product_names: Mapped[list]      = mapped_column(JSON, nullable=False, default=list)
+    launch_date:   Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    status:        Mapped[str]       = mapped_column(String(30), nullable=False, default="planning")  # planning|active|archived
+    created_at:    Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at:    Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ProductLifecycle(Base):
+    __tablename__ = "product_lifecycle"
+    __table_args__ = (UniqueConstraint("brand_id", "product_ref", name="uq_lifecycle_brand_product"),)
+
+    id:                Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:          Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    # product title or SKU — this agent's own tracking key, not FK-bound to
+    # Product (a proposal may not have a real Product row yet).
+    product_ref:       Mapped[str]       = mapped_column(String(255), nullable=False)
+    stage:             Mapped[str]       = mapped_column(String(30), nullable=False, default="idea")
+    performance_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    next_review_date:  Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes:             Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    stage_updated_at:  Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at:        Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class MerchandisingInsight(Base):
+    __tablename__ = "merchandising_insights"
+
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id:   Mapped[str]       = mapped_column(String(100), ForeignKey("brands.brand_id"), nullable=False, index=True)
+    category:   Mapped[str]       = mapped_column(String(50), nullable=False, default="opportunity")
+    # variant_performance|pricing|lifecycle|collection|customer_feedback|opportunity
+    severity:   Mapped[str]       = mapped_column(String(20), nullable=False, default="low")
+    message:    Mapped[str]       = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[float]     = mapped_column(Float, nullable=False, default=0.5)
+    created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

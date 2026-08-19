@@ -59,4 +59,15 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.customer_support_tasks.run_escalation_review_for_all_brands",
         "schedule": crontab(minute="*/30"),  # every 30 min — stale open tickets shouldn't silently rot
     },
+    "approval-execution-sweep": {
+        "task": "tasks.approval_tasks.sweep_unexecuted_approvals",
+        "schedule": crontab(minute="*/15"),  # every 15 min — re-enqueue approved items whose background execution was never claimed (broker was down, worker died, etc.)
+    },
+    "daily-product-merchandising-review": {
+        "task": "tasks.product_tasks.run_product_agent_for_all_brands",
+        "schedule": crontab(hour=7, minute=0),  # 07:00 UTC — last in the chain, so it reads the freshest
+                                                  # opportunities (Research), variant sales (Sales), stock
+                                                  # signals (Inventory), campaign response (Marketing), and
+                                                  # margins (Finance) from everyone that ran before it today.
+    },
 }

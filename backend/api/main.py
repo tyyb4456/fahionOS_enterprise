@@ -18,7 +18,7 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import brands, clerk_webhook, oauth, chat, shopify_webhook, policy_documents, office, customer_support_webhook, courier, dashboard
+from api.routers import brands, clerk_webhook, oauth, chat, shopify_webhook, policy_documents, office, customer_support_webhook, courier, dashboard, approvals
 from api.routers.webchat import webchat_app
 from api.routers.agents import (
     inventory as inventory_agent,
@@ -28,6 +28,7 @@ from api.routers.agents import (
     research as research_agent,
     supplier as supplier_agent,
     customer_support as customer_support_agent,
+    product as product_agent,
 )
 
 import sys
@@ -110,6 +111,7 @@ app.include_router(policy_documents.router)
 app.include_router(office.router)
 app.include_router(customer_support_webhook.router)
 app.include_router(dashboard.router)
+app.include_router(approvals.router)
 app.include_router(inventory_agent.router)
 app.include_router(sales_agent.router)
 app.include_router(marketing_agent.router)
@@ -117,6 +119,7 @@ app.include_router(finance_agent.router)
 app.include_router(research_agent.router)
 app.include_router(supplier_agent.router)
 app.include_router(customer_support_agent.router)
+app.include_router(product_agent.router)
 
 # Isolated sub-app with its own permissive CORS — see api/routers/webchat.py
 app.mount("/api/v1/support/webchat", webchat_app)
@@ -153,5 +156,6 @@ async def system_status():
             "research":  "active",
             "supplier":  "active",
             "customer_support": "active",
+            "product":   "active",
         },
     }

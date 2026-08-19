@@ -877,6 +877,159 @@ async def cancel_order(brand_id: str, order_id: str, reason: str, notify_custome
         "cancelled_at": o.get("cancelled_at"), "reason": reason,
     }
 
+# ── PRODUCT AGENT — WRITE TOOLS ────────────────────────────────────────────────
+
+@mcp.tool()
+async def create_product(
+    brand_id: str,
+    title: str,
+    description: str = "",
+    product_type: str = "",
+    tags: str = "",
+    variants: Optional[list[dict]] = None,
+    status: str = "draft",
+    reason: str = "",
+) -> dict:
+    """
+    Create a new Shopify product — the operational execution step behind a
+    Product Agent proposal actually becoming a real, listable product.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        title: Product title.
+        description: Product description (HTML or plain text) — e.g. from
+                      the Product Agent's generate_product_copy tool.
+        product_type: Shopify product type / category, e.g. "Hoodies".
+        tags: Comma-separated tags.
+        variants: List of variant dicts, e.g.
+                  [{"option1": "Black / M", "price": "3990.00", "sku": "HD-CARGO-BLK-M"}].
+                  Each becomes one Shopify variant. Omit for a single default variant.
+        status: "draft" (default — recommended until a real sample/photo exists)
+                or "active" to publish immediately.
+        reason: Why this product is being created — stored in audit log.
+
+    Returns the new product_id and its variant_ids. Starts in "draft" by
+    default — call update_product_details with status="active" once it's
+    actually ready to sell.
+    Used by: Product Agent (launching an approved proposal).
+    """
+    payload: dict = {
+        "title": title,
+        "body_html": description,
+        "product_type": product_type,
+        "tags": tags,
+        "status": status,
+    }
+    if variants:
+        payload["variants"] = variants
+
+    try:
+        result = await _shopify_post(brand_id, "products.json", {"product": payload})
+    except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+
+    product = result.get("product", {})
+    if not product.get("id"):
+        return {"error": f"Shopify did not return a product id: {result}"}
+
+    return {
+        "success": True,
+        "product_id": product["id"],
+        "title": product.get("title"),
+        "status": product.get("status"),
+        "variant_ids": [v.get("id") for v in product.get("variants", [])],
+        "reason": reason,
+    }
+
+
+@mcp.tool()
+async def update_product_details(
+    brand_id: str,
+    product_id: int,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    tags: Optional[str] = None,
+    status: Optional[str] = None,
+    reason: str = "",
+) -> dict:
+    """
+    Update an existing Shopify product's title/description/tags/status —
+    the same tool covers publishing ("active"), unpublishing ("draft"),
+    and retiring ("archived") a product.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        product_id: Shopify product ID (from create_product or list_products).
+        title: New title. Omit to leave unchanged.
+        description: New description. Omit to leave unchanged.
+        tags: New comma-separated tags. Omit to leave unchanged.
+        status: "draft" | "active" | "archived". Omit to leave unchanged.
+        reason: Why this is changing — stored in audit log.
+
+    Used by: Product Agent (publish a ready product, archive a retired one).
+    """
+    payload: dict = {"id": product_id}
+    if title is not None:
+        payload["title"] = title
+    if description is not None:
+        payload["body_html"] = description
+    if tags is not None:
+        payload["tags"] = tags
+    if status is not None:
+        payload["status"] = status
+
+    try:
+        result = await _shopify_put(brand_id, f"products/{product_id}.json", {"product": payload})
+    except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+
+    product = result.get("product", {})
+    return {"success": True, "product_id": product_id, "status": product.get("status"), "reason": reason}
+
+
+@mcp.tool()
+async def add_product_variant(
+    brand_id: str,
+    product_id: int,
+    option1: str,
+    price: float,
+    sku: str,
+    option2: Optional[str] = None,
+    reason: str = "",
+) -> dict:
+    """
+    Add a new variant (e.g. a new color or size) to an existing Shopify product.
+
+    Args:
+        brand_id: The ID of the brand to query.
+        product_id: Shopify product ID this variant belongs to.
+        option1: Primary option value, e.g. "Black" or "Black / M".
+        price: Variant price in store currency.
+        sku: SKU for the new variant.
+        option2: Secondary option value if the product has two option axes
+                 (e.g. color + size split across option1/option2).
+        reason: Why this variant is being added — stored in audit log.
+
+    Used by: Product Agent (expanding a color/size after strong variant performance).
+    """
+    variant_payload: dict = {"option1": option1, "price": str(price), "sku": sku}
+    if option2 is not None:
+        variant_payload["option2"] = option2
+
+    try:
+        result = await _shopify_post(brand_id, f"products/{product_id}/variants.json", {"variant": variant_payload})
+    except ValueError as e:
+        logger.error("Shopify credential error for brand=%s: %s", brand_id, e)
+        return {"error": str(e)}
+
+    variant = result.get("variant", {})
+    if not variant.get("id"):
+        return {"error": f"Shopify did not return a variant id: {result}"}
+
+    return {"success": True, "product_id": product_id, "variant_id": variant["id"], "sku": sku, "price": price, "reason": reason}
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import AgentDocs from './pages/AgentDocs'
 import Agents from './pages/agents/Agents'
 import Chat from './pages/Chat'
+import Approvals from './pages/Approvals'
 
 // three.js is ~1MB+ — only load the Virtual Office page when it's actually opened.
 const Office = lazy(() => import('./pages/office/Office'))
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="agents" element={<Agents />} />
           <Route path="settings" element={<SettingsRedirect />} />
           <Route path="chat" element={<Chat />} />
+          <Route path="approvals" element={<Approvals />} />
           <Route path="office" element={
             <Suspense fallback={
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: "'Panchang-Variable', 'Panchang-Regular', sans-serif", letterSpacing: '0.08em' }}>

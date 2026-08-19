@@ -339,6 +339,17 @@ async def record_refund(
     session.add(record)
     await session.flush()
 
+    if status == "pending_approval":
+        from notifications.dispatch import notify_approval_required  # local import, avoids load-time cycles
+        try:
+            await notify_approval_required(
+                brand_id, "Refund",
+                f"Refund order #{order_id} — {amount:.2f}",
+                f"Reason: {reason}",
+            )
+        except Exception:
+            logger.exception("Refund approval notification failed for brand=%s", brand_id)
+
     if tid:
         session.add(SupportAction(brand_id=brand_id, ticket_id=tid, action_type="REFUND_" + status.upper(), result={"amount": amount, "reason": reason}))
         await session.flush()
@@ -361,6 +372,16 @@ async def create_exchange(session: AsyncSession, brand_id: str, order_id: str, o
     )
     session.add(record)
     await session.flush()
+
+    from notifications.dispatch import notify_approval_required  # local import, avoids load-time cycles
+    try:
+        await notify_approval_required(
+            brand_id, "Exchange",
+            f"Exchange {original_sku} → {new_sku} (order #{order_id})",
+            "Customer exchange awaiting approval.",
+        )
+    except Exception:
+        logger.exception("Exchange approval notification failed for brand=%s", brand_id)
 
     if tid:
         session.add(SupportAction(brand_id=brand_id, ticket_id=tid, action_type="EXCHANGE_CREATED", result={"original_sku": original_sku, "new_sku": new_sku}))

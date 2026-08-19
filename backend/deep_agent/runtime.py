@@ -9,8 +9,7 @@ depend on this without importing each other — avoids circular imports.
 Note: no MCP clients are built here. The deep agent never talks to
 Shopify/Meta/Instagram/the open web directly — that only happens inside
 the real LangGraph pipelines (agents/{inventory,sales,marketing,finance,
-research}/graph.py), reached exclusively via start_agent_analysis
-(deep_agents/tools/pipeline_tools.py).
+research, customer_support, product}/graph.py)
 """
 
 import asyncio
@@ -36,6 +35,7 @@ from agents.finance.graph import finance_agent
 from agents.research.graph import research_agent
 from agents.supplier.graph import supplier_agent
 from agents.customer_support.graph import customer_support_agent
+from agents.product.graph import product_agent
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +59,12 @@ class FashionOSAgentState(DeepAgentState, total=False):
 
     DeepAgents' SubAgentMiddleware forwards the parent's full state (minus a
     few excluded keys) into each CompiledSubAgent run. The inventory/sales/
-    marketing/finance/research graphs read `state["brand_id"]` (and
-    `state.get("task")`) on their very first node, so without `brand_id` in
-    the supervisor's schema delegation crashed with `KeyError: 'brand_id'`
-    the instant the main agent called a subagent — before any pipeline node
-    ran. Declaring the key here makes it flow: API -> supervisor state ->
-    subagent state.
+    marketing/finance/research/supplier/customer support/product graphs read
+    `state["brand_id"]` (and `state.get("task")`) on their very first node,
+    so without `brand_id` in the supervisor's schema delegation crashed
+    with `KeyError: 'brand_id'` the instant the main agent called a
+    subagent — before any pipeline node ran. Declaring the key here makes
+    it flow: API -> supervisor state -> subagent state.
     """
     brand_id: str
     task: dict[str, Any]
@@ -130,7 +130,7 @@ async def build_supervisor(brand_id: str, brand_name: str):
         name          = f"fashionos-{brand_id}",
         model         = mistral,
         system_prompt = build_prompt(brand_id, brand_name),
-        subagents     = [inventory_agent, sales_agent, marketing_agent, finance_agent, research_agent, supplier_agent, customer_support_agent],
+        subagents     = [inventory_agent, sales_agent, marketing_agent, finance_agent, research_agent, supplier_agent, customer_support_agent, product_agent],
         backend       = backend,
         store         = store,
         memory        = ["/memories/AGENTS.md"],

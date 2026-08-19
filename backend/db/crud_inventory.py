@@ -307,6 +307,16 @@ async def save_recommendations(session: AsyncSession, brand_id: str, recommendat
             status=r.get("status", "ordered"),
             purchase_order_id=uuid.UUID(po_id) if po_id else None,
         ))
+        if r.get("status") == "pending_approval":
+            from notifications.dispatch import notify_approval_required  # local import, avoids load-time cycles
+            try:
+                await notify_approval_required(
+                    brand_id, "Reorder",
+                    f"Reorder {r.get('sku', '')} × {r.get('quantity', 0)}",
+                    f"Urgency: {r.get('urgency', 'normal')}.\n{r.get('reason', '')}",
+                )
+            except Exception:
+                logger.exception("Reorder approval notification failed for brand=%s", brand_id)
     await session.flush()
 
 

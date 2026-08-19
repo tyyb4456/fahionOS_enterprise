@@ -23,6 +23,7 @@ from agents.finance.graph import run_finance_agent
 from agents.research.graph import run_research_agent
 from agents.supplier.graph import run_supplier_agent
 from agents.customer_support.graph import run_customer_support_agent
+from agents.product.graph import run_product_agent
 
 logger = logging.getLogger(__name__)
 
@@ -97,4 +98,11 @@ def run_customer_support_agent_sync(brand_id: str, task: dict) -> dict[str, Any]
     logger.info("Executing run_customer_support_agent_sync for brand_id=%s, task=%s", brand_id, task)
     res = _run_async(run_customer_support_agent(brand_id, task))
     logger.info("Finished run_customer_support_agent_sync for brand_id=%s", brand_id)
+    return res
+
+def run_product_agent_sync(brand_id: str, task: dict) -> dict[str, Any]:
+    """Celery-safe wrapper around the async Product Agent graph."""
+    logger.info("Executing run_product_agent_sync for brand_id=%s, task=%s", brand_id, task)
+    res = _run_async(run_product_agent(brand_id, task))
+    logger.info("Finished run_product_agent_sync for brand_id=%s", brand_id)
     return res
