@@ -1,7 +1,7 @@
 // frontend/src/pages/chat/OfficeBoard.jsx
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, CheckCircle2, Package, TrendingUp, Megaphone, Landmark, Brain } from 'lucide-react'
+import { Loader2, CheckCircle2, Package, TrendingUp, Megaphone, Landmark, Brain, Headphones, Shirt } from 'lucide-react'
 
 // Real subagent tool names — must match agents/*/graph.py's CompiledSubAgent
 // `name=` and deep_agent/runtime.py's `subagents=[...]` list exactly.
@@ -32,14 +32,22 @@ const AGENT_CONFIG = {
     captions: ['Analyzing data…', 'Reading reports…', 'Exploring insights…'],
   },
   supplier_agent: {
-    label: 'Supplier', Icon: Package, color: '#22c55e',
+    label: 'Supplier', Icon: Package, color: '#38bdf8',
     captions: ['Contacting suppliers…', 'Negotiating terms…', 'Tracking shipments…'],
-  }
+  },
+  product_agent: {
+    label: 'Product', Icon: Shirt, color: '#f472b6',
+    captions: ['Reviewing the catalog…', 'Planning collections…', 'Scoring opportunities…'],
+  },
+  customer_support_agent: {
+    label: 'Support', Icon: Headphones, color: '#e879f9',
+    captions: ['Answering tickets…', 'Resolving conversations…', 'Checking feedback…'],
+  },
 }
 
-const AGENT_ORDER = ['inventory_agent', 'sales_agent', 'marketing_agent', 'finance_agent', 'research_agent', 'supplier_agent']
+const AGENT_ORDER = ['inventory_agent', 'sales_agent', 'marketing_agent', 'finance_agent', 'research_agent', 'supplier_agent', 'customer_support_agent', 'product_agent']
 // x position (% of stage width) each agent's desk sits at
-const X_POS = { inventory_agent: 14, sales_agent: 38, marketing_agent: 62, finance_agent: 86, research_agent: 10, supplier_agent: 90 }
+const X_POS = { research_agent: 5, sales_agent: 16, supplier_agent: 27, inventory_agent: 38, marketing_agent: 62, finance_agent: 73, product_agent: 84, customer_support_agent: 95 }
 
 const DONE_LINGER_MS = 4000
 const CAPTION_CYCLE_MS = 1900
@@ -75,7 +83,7 @@ function AgentAvatar({ agentKey, status, xPercent, deskY, loungeY, isMobile }) {
   const [captionIdx, setCaptionIdx] = useState(0)
 
   useEffect(() => {
-    if (status !== 'working') { setCaptionIdx(0); return }
+    if (status !== 'working') return
     const id = setInterval(() => setCaptionIdx(i => (i + 1) % captions.length), CAPTION_CYCLE_MS)
     return () => clearInterval(id)
   }, [status, captions.length])
@@ -212,8 +220,10 @@ export default function OfficeBoard({ toolCalls, isStreaming, isMobile = false }
       Object.values(timersRef.current).forEach(clearTimeout)
       timersRef.current = {}
       prevStatusesRef.current = {}
+      /* eslint-disable react-hooks/set-state-in-effect */
       setStatuses({})
       setPackets([])
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [isStreaming, toolCalls])
 

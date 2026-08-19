@@ -142,37 +142,6 @@ export default function useStreamBuffers(setMessages) {
     return buffersRef.current.get(key)
   }, [])
 
-  /** Push a token into a named buffer. */
-  const push = useCallback((key, text) => {
-    getBuffer(key).push(text)
-    startLoop()
-  }, [getBuffer])
-
-  /** Flush all buffers (call on 'done' event). */
-  const flushAll = useCallback(() => {
-    isFlushingRef.current = true
-    for (const buf of buffersRef.current.values()) {
-      buf.flush()
-    }
-    // Ensure loop is running to drain remaining text
-    startLoop()
-  }, [])
-
-  /** Reset all buffers (call when starting a new message). */
-  const reset = useCallback(() => {
-    stopLoop()
-    isFlushingRef.current = false
-    for (const buf of buffersRef.current.values()) {
-      buf.reset()
-    }
-    buffersRef.current.clear()
-  }, [])
-
-  /** Set the current assistant message ID that the drain loop targets. */
-  const setAsstId = useCallback((id) => {
-    asstIdRef.current = id
-  }, [])
-
   /**
    * Enforce strict sequential typing:
    * 1. main:reasoning types first.
@@ -180,7 +149,7 @@ export default function useStreamBuffers(setMessages) {
    * 3. sub:<src>:content types after subagent reasoning is done.
    * 4. main:content (the final response) types ONLY after ALL reasoning and subagent streams finish.
    */
-  function canDrain(key, buffers) {
+  const canDrain = useCallback(function canDrain(key, buffers) {
     if (key === 'main:reasoning') {
       return true
     }
@@ -214,25 +183,9 @@ export default function useStreamBuffers(setMessages) {
     }
 
     return true
-  }
+  }, [])
 
-  // ── RAF drain loop ──────────────────────────────────────────────────────────
-
-  function startLoop() {
-    if (activeRef.current) return
-    activeRef.current = true
-    rafRef.current = requestAnimationFrame(drainFrame)
-  }
-
-  function stopLoop() {
-    activeRef.current = false
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = null
-    }
-  }
-
-  function drainFrame(timestamp) {
+  const drainFrame = useCallback(function drainFrame(timestamp) {
     if (!activeRef.current) return
 
     const id = asstIdRef.current
@@ -334,12 +287,57 @@ export default function useStreamBuffers(setMessages) {
       activeRef.current = false
       rafRef.current = null
     }
-  }
+  }, [canDrain, setMessages])
+
+  const startLoop = useCallback(() => {
+    if (activeRef.current) return
+    activeRef.current = true
+    rafRef.current = requestAnimationFrame(drainFrame)
+  }, [drainFrame])
+
+  const stopLoop = useCallback(() => {
+    activeRef.current = false
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+  }, [])
+
+  /** Push a token into a named buffer. */
+  const push = useCallback((key, text) => {
+    getBuffer(key).push(text)
+    startLoop()
+  }, [getBuffer, startLoop])
+
+  /** Flush all buffers (call on 'done' event). */
+  const flushAll = useCallback(() => {
+    isFlushingRef.current = true
+    for (const buf of buffersRef.current.values()) {
+      buf.flush()
+    }
+    // Ensure loop is running to drain remaining text
+    startLoop()
+  }, [startLoop])
+
+  /** Reset all buffers (call when starting a new message). */
+  const reset = useCallback(() => {
+    stopLoop()
+    isFlushingRef.current = false
+    for (const buf of buffersRef.current.values()) {
+      buf.reset()
+    }
+    buffersRef.current.clear()
+  }, [stopLoop])
+
+  /** Set the current assistant message ID that the drain loop targets. */
+  const setAsstId = useCallback((id) => {
+    asstIdRef.current = id
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => stopLoop()
-  }, [])
+  }, [stopLoop])
 
   return { push, flushAll, reset, setAsstId }
 }

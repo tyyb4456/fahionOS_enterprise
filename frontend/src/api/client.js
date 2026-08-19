@@ -1,5 +1,5 @@
 import { useAuth } from '@clerk/clerk-react'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 // const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const API_BASE = 'http://localhost:8080'
@@ -10,7 +10,7 @@ export function useApi() {
   // Keep the latest getToken without changing `api`'s identity on every render —
   // otherwise effects that depend on the api object re-run forever (request loop).
   const getTokenRef = useRef(getToken)
-  getTokenRef.current = getToken
+  useEffect(() => { getTokenRef.current = getToken }, [getToken])
 
   const api = useMemo(() => {
     const request = async (method, path, body = null) => {

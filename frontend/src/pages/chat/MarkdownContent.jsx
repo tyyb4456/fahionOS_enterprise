@@ -13,7 +13,7 @@ export default function MarkdownContent({ text, color = 'var(--text-body)', font
           p:  ({ children }) => <p style={{ margin: '0 0 10px', wordBreak: 'break-word' }}>{children}</p>,
           h1: ({ children }) => <h1 style={{ ...base, fontSize: '1.05em', fontWeight: 600, color: 'var(--text-primary)', margin: '14px 0 8px', letterSpacing: '0.01em' }}>{children}</h1>,
           h2: ({ children }) => <h2 style={{ ...base, fontSize: '1em', fontWeight: 600, color: 'var(--text-primary)', margin: '14px 0 8px', letterSpacing: '0.01em' }}>{children}</h2>,
-          h3: ({ children }) => <h3 style={{ ...base, fontSize: '0.95em', fontWeight: 600, color: GOLD, margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.72rem' }}>{children}</h3>,
+          h3: ({ children }) => <h3 style={{ ...base, fontWeight: 600, color: GOLD, margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.72rem' }}>{children}</h3>,
           strong: ({ children }) => <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{children}</strong>,
           em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
           ul: ({ children }) => <ul style={{ margin: '0 0 10px', paddingLeft: '1.2em' }}>{children}</ul>,

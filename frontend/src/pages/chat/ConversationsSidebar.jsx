@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Loader2, MessageSquare, Trash2, ChevronLeft, ChevronRight, PenSquare } from 'lucide-react'
+import { Loader2, Trash2, ChevronLeft, ChevronRight, PenSquare } from 'lucide-react'
 import { GOLD } from './constants'
 import { relativeTime } from './utils'
 

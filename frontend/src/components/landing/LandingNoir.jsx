@@ -1,12 +1,10 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, SignInButton } from '@clerk/clerk-react'
-import { Sparkles, ArrowRight, ArrowDown, ChevronRight, ChevronLeft, CheckCircle2, Zap, Menu, X, Brain, Settings } from 'lucide-react'
-import { agents, howItWorksSteps, integrations, marqueeItems, supervisor, officePods } from './LandingData.jsx'
+import { ArrowRight, ChevronRight, ChevronLeft, CheckCircle2, Zap, Menu, X, Brain } from 'lucide-react'
+import { agents, howItWorksSteps, integrations, supervisor, officePods } from './LandingData.jsx'
 
 const GOLD = '#d4d4d8'
-const BG = '#1e1e1e'
-const CREAM = '#f0eeeb'
 
 export default function LandingNoir() {
   const { isSignedIn } = useAuth()
@@ -43,31 +41,31 @@ export default function LandingNoir() {
   }, [])
 
   const maxRowIndex = Math.max(0, total - cardsPerView)
-  useEffect(() => { setRowIndex(i => Math.min(i, maxRowIndex)) }, [maxRowIndex])
+  const safeRow = Math.min(rowIndex, maxRowIndex)
 
-  const applyRowTransform = (idx, extraPx = 0, withTransition = true) => {
+  const applyRowTransform = useCallback((idx, extraPx = 0, withTransition = true) => {
     const el = trackRef.current
     if (!el) return
     const pct = -(idx * (100 / cardsPerView))
     el.style.transition = withTransition ? 'transform 480ms cubic-bezier(0.16,1,0.3,1)' : 'none'
     el.style.transform = `translateX(calc(${pct}% + ${extraPx}px))`
-  }
+  }, [cardsPerView])
 
-  useEffect(() => { if (isDesktop) applyRowTransform(rowIndex) }, [rowIndex, cardsPerView, isDesktop])
+  useEffect(() => { if (isDesktop) applyRowTransform(Math.min(rowIndex, maxRowIndex)) }, [rowIndex, maxRowIndex, isDesktop, applyRowTransform])
 
   const goRow = (i) => setRowIndex(Math.min(Math.max(i, 0), maxRowIndex))
-  const nextRow = () => goRow(rowIndex + 1)
-  const prevRow = () => goRow(rowIndex - 1)
+  const nextRow = () => goRow(safeRow + 1)
+  const prevRow = () => goRow(safeRow - 1)
 
   const handleRowPointerDown = (e) => {
     rowDragRef.current = { startX: e.clientX, dragging: true, dx: 0 }
-    applyRowTransform(rowIndex, 0, false)
+    applyRowTransform(safeRow, 0, false)
   }
   const handleRowPointerMove = (e) => {
     const d = rowDragRef.current
     if (!d.dragging) return
     d.dx = e.clientX - d.startX
-    applyRowTransform(rowIndex, d.dx, false)
+    applyRowTransform(safeRow, d.dx, false)
   }
   const handleRowPointerUp = () => {
     const d = rowDragRef.current
@@ -76,7 +74,7 @@ export default function LandingNoir() {
     const threshold = 70
     if (d.dx < -threshold) nextRow()
     else if (d.dx > threshold) prevRow()
-    else applyRowTransform(rowIndex, 0, true)
+    else applyRowTransform(safeRow, 0, true)
   }
 
   const stackIndices = Array.from({ length: STACK_SIZE }, (_, i) => ({
@@ -190,8 +188,6 @@ export default function LandingNoir() {
   const handleHeroMouseLeave = () => {
     if (heroImgLayerRef.current) heroImgLayerRef.current.style.transform = 'translate(0,0)'
   }
-
-  const allMarquee = [...marqueeItems, ...marqueeItems, ...marqueeItems]
 
   return (
     <div className="bg-[#1e1e1e] text-[#f0eeeb] font-montserrat min-h-screen overflow-x-hidden relative">
@@ -400,7 +396,7 @@ export default function LandingNoir() {
                   <button
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shrink-0 transition-all duration-300 bg-transparent border border-[#d4d4d8]/25 text-[#f0eeeb]/70 hover:border-[#d4d4d8] hover:bg-[#d4d4d8] hover:text-[#1e1e1e] hover:shadow-[0_0_20px_rgba(212,212,216,0.4)] disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#f0eeeb]/70 disabled:hover:shadow-none"
                     onClick={prevRow}
-                    disabled={rowIndex === 0}
+                    disabled={safeRow === 0}
                     aria-label="Previous agents"
                   >
                     <ChevronLeft size={16} />
@@ -455,7 +451,7 @@ export default function LandingNoir() {
                   <button
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shrink-0 transition-all duration-300 bg-transparent border border-[#d4d4d8]/25 text-[#f0eeeb]/70 hover:border-[#d4d4d8] hover:bg-[#d4d4d8] hover:text-[#1e1e1e] hover:shadow-[0_0_20px_rgba(212,212,216,0.4)] disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#f0eeeb]/70 disabled:hover:shadow-none"
                     onClick={nextRow}
-                    disabled={rowIndex === maxRowIndex}
+                    disabled={safeRow === maxRowIndex}
                     aria-label="Next agents"
                   >
                     <ChevronRight size={16} />
@@ -463,7 +459,7 @@ export default function LandingNoir() {
                 </div>
 
                 <div className="mt-8 font-cormorant text-[1rem] text-[#d4d4d8] text-center">
-                  {String(rowIndex + 1).padStart(2, '0')} <span className="text-[#f0eeeb]/30">/ {String(maxRowIndex + 1).padStart(2, '0')}</span>
+                  {String(safeRow + 1).padStart(2, '0')} <span className="text-[#f0eeeb]/30">/ {String(maxRowIndex + 1).padStart(2, '0')}</span>
                 </div>
               </div>
             ) : (
@@ -731,7 +727,7 @@ export default function LandingNoir() {
 
           <div className="max-w-[800px] mx-auto reveal-on-scroll">
             <div className="relative pl-16 border-l border-[#d4d4d8]/12 after:content-[''] after:absolute after:-left-[1px] after:bottom-0 after:h-[120px] after:w-[1px] after:bg-gradient-to-b after:from-[#d4d4d8]/12 after:to-transparent">
-              {howItWorksSteps.map((step, i) => (
+              {howItWorksSteps.map((step) => (
                 <div key={step.step} className="group/item relative pb-16 last:pb-0">
                   {/* Minimal marker dot on the line — replaces the old filled circle badge */}
                   <div className="absolute -left-[69px] top-2 w-2.5 h-2.5 rounded-full bg-[#1e1e1e] border-2 border-[#d4d4d8]/40 transition-all duration-300 group-hover/item:border-[#d4d4d8] group-hover/item:bg-[#d4d4d8] group-hover/item:shadow-[0_0_12px_rgba(212,212,216,0.55)]" />

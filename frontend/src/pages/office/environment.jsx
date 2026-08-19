@@ -300,7 +300,7 @@ export function Room() {
       <NightWindow position={[6.4, 2.6, -15.28]} />
 
       {/* Pendant rails — one over each pod, the office, and the break room */}
-      {[-8, 0, 8].map(x => (
+      {[-9, -3, 3, 9].map(x => (
         <PendantRail key={x} x={x} z={-2.5} length={5.2} px={[-1.5, 0, 1.5]} />
       ))}
       <PendantRail x={0} z={-11} length={4} px={[-1.2, 1.2]} />

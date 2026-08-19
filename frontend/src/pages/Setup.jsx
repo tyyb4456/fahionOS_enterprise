@@ -39,7 +39,7 @@ export default function Setup() {
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [api, searchParams])
 
   const shopifyJustConnected = searchParams.get('shopify') === 'connected'
   const metaJustConnected    = searchParams.get('meta') === 'connected'

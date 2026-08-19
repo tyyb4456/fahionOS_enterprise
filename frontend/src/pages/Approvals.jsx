@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useApi } from '../api/client'
 import { PageHeader } from '../components/ui'
 import {
@@ -31,10 +30,9 @@ function relTime(iso) {
 
 export default function Approvals() {
   const api      = useApi()
-  const navigate = useNavigate()
 
   const [data,    setData]    = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [dataTab, setDataTab] = useState('')
   const [kind,    setKind]    = useState('all')
   const [tab,     setTab]     = useState('pending')
   const [busyId,  setBusyId]  = useState(null)
@@ -45,12 +43,12 @@ export default function Approvals() {
 
   useEffect(() => { document.title = 'Approvals · FashionOS' }, [])
 
+  const loading = dataTab !== tab
+
   const load = () => {
-    setLoading(true)
     api.get(`/api/v1/approvals${tab === 'decided' ? '?status=decided' : ''}`)
-      .then(setData)
+      .then(res => { setData(res); setDataTab(tab) })
       .catch(e => setFlash({ tone: 'error', text: e.message }))
-      .finally(() => setLoading(false))
   }
 
   useEffect(load, [api, tab])
@@ -303,7 +301,7 @@ export default function Approvals() {
                   : ex.status === 'failed' ? { label: 'Failed · will retry', color: '#f87171', border: 'rgba(248,113,113,0.35)' }
                   : { label: 'Executing…', color: '#facc15', border: 'rgba(250,204,21,0.4)' }
                 ) : { label: 'Queued…', color: '#a8a29e', border: 'var(--card-border)' }
-                let exDetail = ''
+                let exDetail
                 try { exDetail = ex?.detail ? JSON.parse(ex.detail) : '' } catch { exDetail = ex?.detail || '' }
                 return (
                   <div key={i} style={{

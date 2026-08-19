@@ -203,6 +203,14 @@ export const officePods = [
       { label: 'Marketing', role: 'Brand & Marketing', color: '#f97316' },
     ],
   },
+  {
+    name: 'Commerce',
+    blurb: 'Merchandising & customer care',
+    desks: [
+      { label: 'Product',  role: 'Merchandising',      color: '#f472b6' },
+      { label: 'Support',  role: 'Customer Care',      color: '#e879f9' },
+    ],
+  },
 ]
 
 // ── How it works steps ────────────────────────────────────────────────────────
@@ -230,7 +238,7 @@ export const howItWorksSteps = [
   {
     step: '05',
     title: 'Watch the Command Center',
-    desc: 'The virtual office streams every agent\'s live activity — the tools they call and what they execute — across the demand, ops, and growth pods under the supervisor\'s glass office.',
+    desc: 'The virtual office streams every agent\'s live activity — the tools they call and what they execute — across the demand, ops, growth, and commerce pods under the supervisor\'s glass office.',
   },
   {
     step: '06',

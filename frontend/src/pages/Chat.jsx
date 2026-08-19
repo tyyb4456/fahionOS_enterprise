@@ -20,22 +20,6 @@ function getGreeting() {
   return 'Evening'
 }
 
-// Copper asterisk / starburst icon (Claude-inspired)
-function AsteriskLogo({ size = 40, color = '#d4d4d8' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 4 L20 36" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
-      <path d="M4 20 L36 20" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
-      <path d="M8.69 8.69 L31.31 31.31" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
-      <path d="M31.31 8.69 L8.69 31.31" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
-      <path d="M5.36 12.32 L34.64 27.68" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
-      <path d="M34.64 12.32 L5.36 27.68" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
-      <path d="M12.32 5.36 L27.68 34.64" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
-      <path d="M27.68 5.36 L12.32 34.64" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
-    </svg>
-  )
-}
-
 export default function Chat() {
   const { getToken } = useAuth()
   const { user } = useUser()

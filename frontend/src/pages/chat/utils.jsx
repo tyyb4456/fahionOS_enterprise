@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { KEY_LABEL_OVERRIDES } from './constants'
 
 // ── IDs ──────────────────────────────────────────────────────────────────────────
