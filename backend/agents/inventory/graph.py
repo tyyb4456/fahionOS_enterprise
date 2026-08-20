@@ -42,6 +42,7 @@ from langchain_mistralai import ChatMistralAI
 from langchain.chat_models import init_chat_model
 
 from agents.common.progress import AnnounceToolCalls, progress as emit_progress
+from agents.common.task_input import resolve_task_input
 from db import crud_inventory as crud
 from db.session import AsyncSessionLocal
 from .state import InventoryPipelineState
@@ -84,14 +85,7 @@ async def reasoning_node(state: InventoryPipelineState) -> dict:
 
     agent = create_agent(model, tools, middleware=[AnnounceToolCalls()])
 
-    messages = state.get("messages", [])
-    if messages:
-        last_msg = messages[-1]
-        task_input = getattr(last_msg, "content", str(last_msg))
-    else:
-        task_input = state.get("task", {})
-
-    task_prompt = build_task_prompt(task_input, state.get("context", {}))
+    task_prompt = build_task_prompt(resolve_task_input(state), state.get("context", {}))
     result = await agent.ainvoke({
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},

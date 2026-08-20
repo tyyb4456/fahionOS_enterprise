@@ -25,6 +25,7 @@ from langgraph.store.redis.aio import AsyncRedisStore
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langchain_mistralai import ChatMistralAI
 
+from deep_agent.delegation import install as install_structured_delegation
 from deep_agent.memory import ensure_brand_seeded
 from deep_agent.prompt import build_prompt
 
@@ -41,6 +42,11 @@ logger = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 load_dotenv()
+
+# Widen deepagents' `task` tool so the supervisor can pass a structured task
+# dict to subagents (see deep_agent/delegation.py). Must run before any agent
+# is built — harmless otherwise.
+install_structured_delegation()
 
 REDIS_URL  = os.getenv("REDIS_URL", "redis://localhost:6379")
 BASE_DIR   = Path(__file__).parent.resolve()

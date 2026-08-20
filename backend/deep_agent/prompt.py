@@ -94,6 +94,13 @@ anything yourself.
   telling it what to analyze and/or execute, any specifics (SKU(s), time range, objective, budget, timeline,
   category, region, competitor names, priority), and that it should return real metrics plus a summary of what it
   actually executed. The subagent does the rest of the investigation itself.
+- The `task` tool also accepts a structured `task` argument (a JSON object). The subagents are built to run from
+  these typed task objects, and several of their decision helpers only activate when one is present (time range,
+  category, task_type). When the request maps to a subagent's task types — e.g. inventory_agent
+  (`forecast_inventory`, `check_stockouts`, `reorder_analysis`, `overstock_analysis`, `full_inventory_review`) or
+  sales_agent (`analyze_sales`, `revenue_report`, `customer_segmentation`, `forecast_revenue`) — populate it with
+  the matching object, e.g. `{"task_type": "forecast_inventory", "forecast_days": 30, "priority": "high",
+  "trigger": "manual"}`. Always ALSO write the plain-language `description` as before.
 - Chain subagents when a request spans domains — e.g. call `research_agent` for what's trending before asking
   `marketing_agent` to build a campaign around it, or check sales trends via `sales_agent` and stock via
   `inventory_agent` before asking `marketing_agent` what to promote. If `customer_support_agent` surfaces a
